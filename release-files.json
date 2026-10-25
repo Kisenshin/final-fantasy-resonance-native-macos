@@ -18,13 +18,23 @@
     },
     {
       "path": "README.md",
-      "bytes": 7046,
-      "sha256": "e829d9e52118ce6cf4c24cb91e86ea947f58c6f80b2de03ea6b78f9f0fc0fef6"
+      "bytes": 8155,
+      "sha256": "77c56ae768f55480a8c7720b9875c31620ef16deadf76637803034377f48638e"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
       "bytes": 2020,
       "sha256": "f2347100ece5f9394d7a09e60d7582bc8c7ae693f94da3024fe154d1c8bffbf7"
+    },
+    {
+      "path": "docs/AI_BUILD_GUIDE.md",
+      "bytes": 4584,
+      "sha256": "d82c73a774abe78e5f26f5f5c501603ab37146fbd63bbf2eff648ffda513f5a8"
+    },
+    {
+      "path": "docs/CONTROLS_AND_FPS.md",
+      "bytes": 5466,
+      "sha256": "17f5dc65dbfdfea3b93c7d629a8f86d788b18d9a9f1ba5c8ac1dcc8f09807174"
     },
     {
       "path": "docs/PUBLISHING.md",

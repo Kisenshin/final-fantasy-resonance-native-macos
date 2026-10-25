@@ -1,4 +1,6 @@
-# 最终幻想：共鸣 — 实验性 Apple Silicon macOS 适配
+# FINAL FANTASY RESONANCE Native macOS
+
+最终幻想：共鸣 — 基于 nxnative 的实验性 Apple Silicon macOS 适配
 
 基于 [nxnative](https://github.com/seedds/nxnative) 的源码适配项目。用户自行提供游戏文件与从自己的主机导出的密钥，在本机生成 Mac 应用。仓库只提供适配源码、补丁、标识表和脚本，不提供游戏本体或可直接游玩的应用。
 
@@ -19,6 +21,12 @@
 
 发布目录采用现场 GPU 采样实验之前保存的运行时源码，**不包含尚未验证的实时 GPU 采样改动**。没有用停画某个粒子材质的方式作为正式修复。
 
+## 用 AI 协助构建
+
+把本仓库链接交给具有本机终端和文件访问能力的 AI，可以减少查找流程和排错的工作。还需要用户自己的游戏文件、密钥路径、Mac 环境和足够的磁盘空间；这不是提供链接即可保证成功的一键转译服务。
+
+[给 AI 的构建指南与可复制提示词](docs/AI_BUILD_GUIDE.md) · [键盘／Xbox／Switch Pro 与 30／60 帧详细操作](docs/CONTROLS_AND_FPS.md)
+
 ## 自备输入与依赖
 
 1. 自己的港版本体 NSP、1.0.1 更新 NSP，以及自己的 `prod.keys` 路径；可选自有 DLC。
@@ -34,6 +42,8 @@
 先创建 Python 环境并安装依赖。以下路径都是示例，请替换；不要直接把密钥值输入命令行。
 
 ```sh
+git clone https://github.com/Kisenshin/final-fantasy-resonance-native-macos.git
+cd final-fantasy-resonance-native-macos
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
@@ -76,11 +86,13 @@ python scripts/build_mac.py \
 - Metal 编译器、.NET 和图形 API 都由本机环境提供；缺少某一工具应按错误提示准备依赖，不要关闭 SIP 或 Gatekeeper 来替代排错。
 - 本项目的帧率菜单补丁必须从用户提取的 IoStore 中读取两个资源并验证哈希。仓库不附带 `.uasset` 或修改后的容器。
 
-## 操作与存档
+## 操作、手柄与游戏内 30／60 帧
 
-键盘移动 WASD；确认 J／空格，返回 K／Esc，菜单 Enter，L／R 为 Q／E，ZL／ZR 为 Z／C，X 为 U，Y 为 I；F1 查看对照，F2 隐藏提示。Xbox 按字母映射，A 确认、B 返回。Switch Pro 保持原布局。设备提示随最近使用的输入切换。
-
-帧率设置修改后需执行游戏自己的「套用」。全屏使用窗口的全屏按钮或 macOS 系统全屏快捷键。存档位于 `~/Library/Application Support/FFRNative/0100B8A026F14000/save`；此处构建工具不读取或打包已有存档。
+- **Xbox 按字母映射：A 确认、B 返回**；Switch Pro 保留原布局。完整键盘／手柄表、连接与提示说明见 [详细操作指南](docs/CONTROLS_AND_FPS.md)。
+- 最近使用的输入设备决定窗口底部提示栏；**原游戏内部的 Switch 按键图案仍保留**，并非每处图标都会自动变成 Xbox 或键盘样式。F1 打开对照表，F2 隐藏／显示底部提示。
+- 帧率入口：**系统菜单 → 选项 → 画面设置 → 帧率 → 30／60 → Y 套用 →「是」→ A 确认**。键盘套用按 **I**，确认按 **J／空格**；设置保存后可在重启时恢复。标题页 `Option` 也可进入。
+- 60 帧是实验性目标，不代表所有场景持续达到 60；顶部 `Performance` 显示目标档位，切换统一在原游戏选项中完成。
+- 全屏：**Control＋Command＋F** 或窗口绿色按钮。存档位于 `~/Library/Application Support/FFRNative/0100B8A026F14000/save`，构建工具不读取或打包已有存档。
 
 ## 发布内容与验证状态
 
