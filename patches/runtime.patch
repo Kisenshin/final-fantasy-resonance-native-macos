@@ -1,0 +1,832 @@
+--- a/dm/gfx/nvn/dmsh_chain.h
++++ b/dm/gfx/nvn/dmsh_chain.h
+@@ -1,3 +1,3 @@
+ // Generated file (dm/gfx/tools/dmsh_chain.py --header): the B shader library translation chain version this source tree expects (default options), one for every game;
+ // the host loads only <library dir>/b-<V>/. Run dmsh_chain.py --header after changing the chain's tools and commit this file with the change
+-#define DMSH_CHAIN "3f4cd4aacd1d"
++#define DMSH_CHAIN "e09c9cc1f074"
+--- a/dm/gfx/nvn/nvn_mtl.m
++++ b/dm/gfx/nvn/nvn_mtl.m
+@@ -1241,6 +1241,10 @@
+     g_cb = nil;
+     g_commit_blocks = nil;
+     objc_autoreleasePoolPop(g_sub_pool); g_sub_pool = NULL;
++    // Diagnostic: distinguish cross-submission lifetime hazards from shader/rendering semantics.
++    static int submit_wait = -1;
++    if (submit_wait < 0) { const char *e = getenv("DM_NVN_SUBMIT_WAIT"); submit_wait = e && !strcmp(e, "1"); }
++    if (submit_wait) mtl_wait(fence, UINT64_MAX);
+     return fence;
+ }
+ 
+@@ -1421,6 +1425,11 @@
+ // DM_NVN_DIRTYCHECK=1 (diagnostic, compared against ground truth): fully hash the pool content on every use; changed but not detected by dirty-page tracking = a missed detection
+ static int dirtycheck(void) { static int v = -1; if (v < 0) v = getenv("DM_NVN_DIRTYCHECK") != NULL; return v; }
+ static uint64_t full_hash(const uint8_t *m, uint64_t n) { uint64_t h = 1469598103934665603ull; for (uint64_t i = 0; i < n; i++) h = (h ^ m[i]) * 1099511628211ull; return h; }
++// Native MSL texture atomics require the atomic usage on integer image storage.
++static MTLTextureUsage image_write_usage(uint32_t pf, MTLTextureType type) {
++    int native = type == MTLTextureType2D || type == MTLTextureType2DArray || type == MTLTextureType3D;
++    return MTLTextureUsageShaderWrite | (native && (pf == MTLPixelFormatR32Uint || pf == MTLPixelFormatR32Sint) ? MTLTextureUsageShaderAtomic : 0);
++}
+ static MTLTextureDescriptor *tex_desc(const tex_t *t, int packaged) {
+     uint32_t pf = 0; uint8_t swz[4];
+     if (!nvn_fmt_to_mtl(t->d.format, &pf, swz) || !pf) { RED_ONCE(0, "texture format %#x has no Metal equivalent (first case)", t->d.format); return nil; }
+@@ -1430,6 +1439,11 @@
+     d.pixelFormat = (MTLPixelFormat)pf;
+     d.width = t->d.width ? t->d.width : 1; d.height = t->d.height ? t->d.height : 1; d.depth = 1; d.arrayLength = 1;
+     d.mipmapLevelCount = t->d.levels ? t->d.levels : 1;
++    // Diagnostic/workaround: this title uploads only level 0 of some 128x128 BC1 textures
++    // (B2T128 level=0 only), leaving levels 1-7 undefined. Sampling with a positive LOD bias
++    // then reads black. Creating the texture with one level clamps such samples to level 0.
++    if (getenv("DM_NVN_MIP1_128_BC1") && t->d.width == 128 && t->d.height == 128 && t->d.levels == 8 && t->d.format == 0x41)
++        d.mipmapLevelCount = 1;
+     switch (t->d.target) {
+         // 1D / 1D array are created as one-row 2D / 2D array textures: translated shaders never declare texture1d (0 in all five games' libraries) and always sample them as 2D; a Metal 1D texture bound to a texture2d argument is a type mismatch with undefined reads.
+         // Super Mario 3D World + Bowser's Fury's material shaders sample 64x1 R32F 1D lookup tables heavily every frame (on Maxwell a 2D sample of a 1D texture reads that one row)
+@@ -1450,7 +1464,7 @@
+     }
+     d.storageMode = MTLStorageModePrivate;   // Render targets and assets both go in GPU private storage (lossless compression available)
+     d.usage = MTLTextureUsageShaderRead | (fmt_compressed(t->d.format) || packaged ? 0 : MTLTextureUsageRenderTarget)
+-            | (t->d.flags & NVN_TEXTURE_FLAGS_IMAGE ? MTLTextureUsageShaderWrite : 0);   // Image usage: shader-writable (compute kernels generating the 3D color lookup table, etc.
++            | (t->d.flags & NVN_TEXTURE_FLAGS_IMAGE ? image_write_usage(pf, d.textureType) : 0);   // Image usage: shader-writable (compute kernels generating the 3D color lookup table, etc.
+     return d;
+ }
+ // In-place upgrade: when the original texture was not created with PixelFormatView (off by default, to keep Apple GPU lossless compression) but a different-format view is needed, create a new one with the original spec + PixelFormatView, copy over every slice × level, and replace the registration.
+@@ -1867,7 +1881,7 @@
+     if (mo % al || row % al) { RED_ONCE(65, "linear texture offset %#llx / row pitch %zu not aligned to %lu bytes; created as a private texture (CPU writes invisible)", (unsigned long long)mo, row, (unsigned long)al); return nil; }
+     MTLTextureDescriptor *d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:(MTLPixelFormat)pf width:t->d.width ? t->d.width : 1 height:t->d.height ? t->d.height : 1 mipmapped:NO];
+     d.resourceOptions = b.resourceOptions;
+-    d.usage = MTLTextureUsageShaderRead | (t->d.flags & NVN_TEXTURE_FLAGS_IMAGE ? MTLTextureUsageShaderWrite : 0) | (t->d.flags & NVN_TEXTURE_FLAGS_LINEAR_RENDER_TARGET ? MTLTextureUsageRenderTarget : 0);
++    d.usage = MTLTextureUsageShaderRead | (t->d.flags & NVN_TEXTURE_FLAGS_IMAGE ? image_write_usage(pf, d.textureType) : 0) | (t->d.flags & NVN_TEXTURE_FLAGS_LINEAR_RENDER_TARGET ? MTLTextureUsageRenderTarget : 0);
+     return [b newTextureWithDescriptor:d offset:mo bytesPerRow:row];
+ }
+ // CPU-written block-linear textures (WriteTexels): the game gave no packaged layout and changes the content from the CPU each frame (Engage's movie frames: a Y plane R8 + a UV plane RG8, WriteTexels every frame).
+@@ -1994,7 +2008,7 @@
+             static int once; if (!once++) MLOG("buffer texture at pool offset %#llx, below Metal's reported %lu-byte alignment: created there (element-aligned views read correctly on Apple GPUs)", (unsigned long long)mo, (unsigned long)al);
+         }
+         MTLTextureDescriptor *d = [MTLTextureDescriptor textureBufferDescriptorWithPixelFormat:(MTLPixelFormat)pf width:t->d.width resourceOptions:b.resourceOptions
+-                                                                                         usage:MTLTextureUsageShaderRead | (t->d.flags & NVN_TEXTURE_FLAGS_IMAGE ? MTLTextureUsageShaderWrite : 0)];
++                                                                                         usage:MTLTextureUsageShaderRead | (t->d.flags & NVN_TEXTURE_FLAGS_IMAGE ? image_write_usage(pf, MTLTextureTypeTextureBuffer) : 0)];
+         size_t row = ((size_t)t->d.width * bpb + al - 1) / al * al;
+         id<MTLTexture> mt = [b newTextureWithDescriptor:d offset:mo bytesPerRow:row];
+         if (!mt) { RED_ONCE(39, "cannot create buffer texture: %u elements format %#x", t->d.width, t->d.format); return nil; }
+@@ -4369,8 +4383,8 @@
+     static __strong id<MTLTexture> cache[8][4];
+     id<MTLTexture> t = cache[dtt & 7][dpf & 3]; if (t) return t;
+     MTLTextureDescriptor *d = [MTLTextureDescriptor new];
+-    d.textureType = (MTLTextureType)dtt; d.pixelFormat = dpf == NVN_DPF_UINT ? MTLPixelFormatRGBA32Uint : dpf == NVN_DPF_SINT ? MTLPixelFormatRGBA32Sint : MTLPixelFormatRGBA16Float;
+-    d.width = d.height = d.depth = 1; d.storageMode = MTLStorageModePrivate; d.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
++    d.textureType = (MTLTextureType)dtt; d.pixelFormat = dpf == NVN_DPF_UINT ? MTLPixelFormatR32Uint : dpf == NVN_DPF_SINT ? MTLPixelFormatR32Sint : MTLPixelFormatRGBA16Float;
++    d.width = d.height = d.depth = 1; d.storageMode = MTLStorageModePrivate; d.usage = MTLTextureUsageShaderRead | image_write_usage(d.pixelFormat, d.textureType);
+     t = [g_dev newTextureWithDescriptor:d]; cache[dtt & 7][dpf & 3] = t; g_dummy_img_rid[dtt & 7][dpf & 3] = t.gpuResourceID._impl; res_add(t); return t;
+ }
+ static id<MTLBuffer> dummy_buf(void);
+@@ -4449,7 +4463,9 @@
+ static int encode_args_(id<MTLCommandEncoder> en, NvShader *sh, int nvn_stage, int metal_vertex) {
+     if (!sh->ae) return 1;
+     args_sync_dirty();
+-    if (!passdump() && !g_args_dirty[nvn_stage] && sh->ab_buf && sh->ab_pass == g_pass.serial && nvn_stage != 5 && !(sh->rf.drv_read[0] && sh->ab_binst != g_draw_binst)) {
++    static int args_cache = -1;
++    if (args_cache < 0) { const char *e = getenv("DM_NVN_ARGS_CACHE"); args_cache = !(e && !strcmp(e, "0")); }
++    if (args_cache && !passdump() && !g_args_dirty[nvn_stage] && sh->ab_buf && sh->ab_pass == g_pass.serial && nvn_stage != 5 && !(sh->rf.drv_read[0] && sh->ab_binst != g_draw_binst)) {
+         bind_args(en, nvn_stage, metal_vertex, sh->ab_buf, sh->ab_gpu, sh->ab_off, sh->rf.abi);
+         g_stat_args_reuse++;
+         return 1;
+@@ -6647,6 +6663,29 @@
+     }
+ }
+ 
++static pthread_mutex_t g_diag_skip_mu = PTHREAD_MUTEX_INITIALIZER;
++static _Atomic int g_diag_skip_n;
++static char g_diag_skip_keys[16][17];
++// Diagnostic live counterpart of DM_NVN_SKIP_FS; '-' restores every draw.
++void dm_gfx_skipfs(const char *keys) {
++    pthread_mutex_lock(&g_diag_skip_mu);
++    memset(g_diag_skip_keys, 0, sizeof g_diag_skip_keys); int n = 0;
++    for (const char *q = keys; q && *q && *q != '-' && n < 16;
++         q = strchr(q, ',') ? strchr(q, ',') + 1 : q + strlen(q)) {
++        size_t len = MIN(strcspn(q, ","), (size_t)16);
++        if (len) memcpy(g_diag_skip_keys[n++], q, len);
++    }
++    atomic_store(&g_diag_skip_n, n);
++    pthread_mutex_unlock(&g_diag_skip_mu);
++    MLOG("[skipfs] live diagnostic: %d fragment shader prefixes (%s)", n, keys);
++}
++static int diag_skip_fs(const char *key) {
++    if (!atomic_load(&g_diag_skip_n)) return 0;
++    int skip = 0; pthread_mutex_lock(&g_diag_skip_mu);
++    for (int i = 0; i < atomic_load(&g_diag_skip_n); i++)
++        if (!strncmp(key, g_diag_skip_keys[i], strlen(g_diag_skip_keys[i]))) { skip = 1; break; }
++    pthread_mutex_unlock(&g_diag_skip_mu); return skip;
++}
+ static void draw(const p_draw *dw, const p_draw_idx *di) {
+     g_draw_binst = (uint32_t)(dw ? dw->base_instance : di ? di->base_instance : 0);   // c0 + 0x644 of the stages that read the driver segment (encode_args)
+     if (!g_geo_program && S.prog) {
+@@ -6681,6 +6720,7 @@
+     // Draws that cannot draw anything (both faces culled, empty scissor) return before the render pass is opened: otherwise the render pass is already open and on TBDR the whole attachment is loaded and stored for nothing
+     // (Mac character select page: 3 render passes are opened only because of such draws, all loaded, zero draws)
+     // Diagnostic switch for measuring an upper bound DM_NVN_SKIP_FS=<fragment key>[,<fragment key>...] (none by default): drops all draws of these fragment shaders (the picture will be wrong; only used in real-device ABA to measure "how much GPU time this class of draws is worth in total")
++    if (pr->sh[1] && !g_defer_replaying && diag_skip_fs(pr->sh[1]->key)) return;
+     { static char sk[16][20]; static int nsk = -1;
+       if (nsk < 0) { nsk = 0; for (const char *q = getenv("DM_NVN_SKIP_FS"); q && *q && nsk < 16; q = strchr(q, ',') ? strchr(q, ',') + 1 : q + strlen(q)) { size_t n = strcspn(q, ","); if (n > 16) n = 16; memcpy(sk[nsk], q, n); sk[nsk++][n] = 0; }
+                      if (nsk) MLOG("DM_NVN_SKIP_FS: dropping the draws of %d fragment shaders (diagnostic; the picture is wrong)", nsk); }
+@@ -7098,6 +7138,11 @@
+     int is3d = c->tex->d.target == 2, nz = c->r.depth ? c->r.depth : 1;
+     PD("C ser=%llu target %d %ux%ux%u format %#x lv%u sl%u region %d,%d,%d %dx%dx%d from %#llx row %zu image %zu", c->tex->serial, c->tex->d.target, c->tex->d.width, c->tex->d.height, c->tex->d.depth,
+        c->tex->d.format, level, layer0, c->r.xoffset, c->r.yoffset, c->r.zoffset, c->r.width, c->r.height, c->r.depth, (unsigned long long)c->src, row, img);
++    if (c->tex && c->tex->d.width == 128 && c->tex->d.height == 128 && c->tex->d.levels == 8 && getenv("DM_NVN_COPYLOG"))
++        MLOG("B2T128 ser=%llu basefmt=%#x viewfmt=%#x mtlpf=%lu mtltype=%lu region %d,%d,%d %dx%dx%d row=%zu img=%zu level=%u",
++             (unsigned long long)c->tex->serial, c->tex->d.format,
++             c->has_view && c->view.set_format ? c->view.format : 0, (unsigned long)t.pixelFormat, (unsigned long)t.textureType,
++             c->r.xoffset, c->r.yoffset, c->r.zoffset, c->r.width, c->r.height, c->r.depth, row, img, level);
+     void *mb; uint64_t mo;
+     if (!mtl_addr(c->src, img * nz, &mb, &mo)) { RED_ONCE(23, "buffer→texture copy source is in no memory pool"); return; }
+     g_cut_copy = 1;
+@@ -7826,6 +7871,50 @@
+              t->d.width, t->d.height, t->d.depth, t->d.format, t->d.levels, t->d.flags, (void *)t->mem, (unsigned long long)t->L.size, t->L.tileH, t->L.tileD); }
+     pthread_mutex_unlock(&g_rmu);
+ }
++// Read the actual registered BC1 view, not its CPU shadow. Diagnostic only:
++// texmips <texture ID> <path prefix> writes every mip with aligned block rows.
++void dm_gfx_texmips(int tid, const char *path) {
++    id<MTLTexture> t = nil; uint64_t serial = 0;
++    pthread_mutex_lock(&g_rmu);
++    if (tid > 0 && tid < g_ntreg && g_treg[tid].ok && g_treg[tid].view) {
++        t = (__bridge id<MTLTexture>)g_treg[tid].view;
++        serial = g_treg[tid].t.serial;
++    }
++    pthread_mutex_unlock(&g_rmu);
++    if (!t || t.textureType != MTLTextureType2D ||
++        (t.pixelFormat != MTLPixelFormatBC1_RGBA && t.pixelFormat != MTLPixelFormatBC1_RGBA_sRGB)) {
++        MLOG("[texmips] tid=%d: no cached 2D BC1 view", tid); return;
++    }
++    mtl_finish_gpu();
++    MLOG("[texmips] tid=%d ser=%llu %lux%lu format=%lu mips=%lu parentLevel=%lu", tid,
++         (unsigned long long)serial, (unsigned long)t.width, (unsigned long)t.height,
++         (unsigned long)t.pixelFormat, (unsigned long)t.mipmapLevelCount, (unsigned long)t.parentRelativeLevel);
++    for (NSUInteger lv = 0; lv < t.mipmapLevelCount; lv++) {
++        NSUInteger w = MAX(t.width >> lv, 1ul), h = MAX(t.height >> lv, 1ul);
++        NSUInteger blockrow = ((w + 3) / 4) * 8, rows = (h + 3) / 4;
++        NSUInteger row = (blockrow + 255) & ~255ul, size = row * rows;
++        id<MTLBuffer> buf = [g_dev newBufferWithLength:size options:MTLResourceStorageModeShared];
++        if (!buf) return;
++        memset(buf.contents, 0, size);
++        id<MTLCommandBuffer> cb = q_cb();
++        [cb encodeWaitForEvent:g_ev value:g_fence];
++        id<MTLBlitCommandEncoder> b = [cb blitCommandEncoder];
++        [b copyFromTexture:t sourceSlice:0 sourceLevel:lv sourceOrigin:MTLOriginMake(0, 0, 0)
++               sourceSize:MTLSizeMake(w, h, 1) toBuffer:buf destinationOffset:0
++               destinationBytesPerRow:row destinationBytesPerImage:size];
++        [b endEncoding]; [cb commit]; [cb waitUntilCompleted];
++        if (cb.status == MTLCommandBufferStatusError) { MLOG("[texmips] read failed: %s", cb.error.localizedDescription.UTF8String); return; }
++        char dst[1024]; snprintf(dst, sizeof dst, "%s-m%lu.bc1", path, (unsigned long)lv);
++        FILE *f = fopen(dst, "wb");
++        if (f) { fprintf(f, "%lu %lu %lu %lu %lu %lu\n", (unsigned long)w, (unsigned long)h,
++                        (unsigned long)t.pixelFormat, (unsigned long)row, (unsigned long)rows, (unsigned long)lv);
++                 fwrite(buf.contents, 1, size, f); fclose(f); }
++        unsigned nonzero = 0; const uint8_t *bytes = buf.contents;
++        for (NSUInteger y = 0; y < rows; y++) for (NSUInteger x = 0; x < blockrow; x++) nonzero += bytes[y * row + x] != 0;
++        MLOG("[texmips] tid=%d mip=%lu nonzero=%u bytes=%lu -> %s", tid, (unsigned long)lv,
++             nonzero, (unsigned long)(blockrow * rows), dst);
++    }
++}
+ void dm_gfx_texdump_next(const char *path) {
+     if (g_td_frame == -2) td_note(nil, 0);   // read DM_NVN_TEXDUMP first, so it does not override the request
+     g_td_path = strdup(path); g_td_list = [NSMutableArray array]; g_td_done = 0; g_td_frame = (long)atomic_load(&g_cur_frame) + 1;
+@@ -8093,7 +8182,10 @@
+     if (rl && (src.pixelFormat == MTLPixelFormatRGBA8Unorm || src.pixelFormat == MTLPixelFormatBGRA8Unorm || src.pixelFormat == MTLPixelFormatRGBA8Unorm_sRGB || src.pixelFormat == MTLPixelFormatBGRA8Unorm_sRGB)) {
+         NSUInteger x0 = (NSUInteger)(rr[0] * src.width), y0 = (NSUInteger)(rr[1] * src.height), w = (NSUInteger)(rr[2] * src.width) - x0, h = (NSUInteger)(rr[3] * src.height) - y0;
+         id<MTLBuffer> rb = [g_dev newBufferWithLength:w * h * 4 options:MTLResourceStorageModeShared];
+-        id<MTLCommandBuffer> cb = q_cb(); id<MTLBlitCommandEncoder> b = [cb blitCommandEncoder];
++        id<MTLCommandBuffer> cb = q_cb();
++        // This diagnostic uses the legacy queue; order it after Metal 4 rendering without blocking the CPU.
++        [cb encodeWaitForEvent:g_ev value:g_fence];
++        id<MTLBlitCommandEncoder> b = [cb blitCommandEncoder];
+         [b copyFromTexture:src sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(x0, y0, 0) sourceSize:MTLSizeMake(w, h, 1) toBuffer:rb destinationOffset:0 destinationBytesPerRow:w * 4 destinationBytesPerImage:w * h * 4];
+         [b endEncoding];
+         unsigned long long n = g_present_n, tns = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+--- a/dm/gfx/nvn/nvn_refl.m
++++ b/dm/gfx/nvn/nvn_refl.m
+@@ -27,8 +27,19 @@
+     return [[ty substringWithRange:NSMakeRange(NSMaxRange(c), ty.length - 1 - NSMaxRange(c))] intValue];
+ }
+ 
+-// Whether a storage buffer binding may be written: route A's reflection says so ("rw"); route B's does not, and there SPIRV-Cross types a buffer the shader never writes as const device
+-static int sbuf_rw(NSDictionary *b) { id rw = b[@"rw"]; if (rw) return [rw boolValue]; id ty = b[@"msl_type"]; return !([ty isKindOfClass:[NSString class]] && [ty hasPrefix:@"const "]); }
++// Some route B reflections report rw=false even for stores and atomics. Mutable
++// device pointers must remain potentially writable; cb_extent filters slots
++// independently proven read-only when tracking actual GPU writes.
++static int sbuf_rw(NSDictionary *b) {
++    if ([b[@"rw"] boolValue]) return 1;
++    id ty = b[@"msl_type"];
++    if ([ty isKindOfClass:[NSString class]]) {
++        if ([ty hasPrefix:@"const "] || [ty hasPrefix:@"device const "]) return 0;
++        if ([ty hasPrefix:@"device "]) return 1;
++    }
++    id rw = b[@"rw"];
++    return rw ? [rw boolValue] : 1;
++}
+ int nvn_refl_from_json(NSDictionary *j, nvn_refl *o, char *err, int errlen) {
+     memset(o, 0, sizeof *o);
+     #define FAIL(...) do { free(o->c1); o->c1 = NULL; snprintf(err, errlen, __VA_ARGS__); return 1; } while (0)
+--- a/dm/gfx/tools/c1_guard.py
++++ b/dm/gfx/tools/c1_guard.py
+@@ -9,6 +9,7 @@
+ # masks wider than the data passed, and compute shaders (cp_c1) were never checked.
+ import datetime
+ import json
++import multiprocessing
+ import os
+ import re
+ import sys
+@@ -200,25 +201,28 @@
+     return span is not None and known(low, high) and low >= 0 and 16 * (high + 1) <= span
+ 
+ 
++def shader_needs_guard(path):
++    name = os.path.basename(path)
++    with open(path, encoding="utf-8") as stream:
++        source = stream.read()
++    accesses = set(ACCESS.findall(source))
++    if not accesses:
++        return None
++    key = name[:-len("_b.metal")] if name.endswith("_b.metal") else name[:-6]
++    definitions = definitions_of(source)
++    span = c1_span(os.path.join(os.path.dirname(path), key + "_b.json"))
++    return key if not all(proven(index, definitions, span) for index in accesses) else None
++
++
+ def main():
+     if len(sys.argv) != 3:
+         raise SystemExit(f"usage: {sys.argv[0]} <dmsh_b version dir> <output tsv>")
+     version_dir, output = map(os.path.abspath, sys.argv[1:])
+-    keys = []
+-    for name in sorted(os.listdir(version_dir)):
+-        if not name.endswith(".metal"):
+-            continue
+-        path = os.path.join(version_dir, name)
+-        with open(path, encoding="utf-8") as stream:
+-            source = stream.read()
+-        accesses = set(ACCESS.findall(source))
+-        if not accesses:
+-            continue
+-        key = name[:-len("_b.metal")] if name.endswith("_b.metal") else name[:-6]
+-        definitions = definitions_of(source)
+-        span = c1_span(os.path.join(version_dir, key + "_b.json"))
+-        if not all(proven(index, definitions, span) for index in accesses):
+-            keys.append(key)
++    paths = [os.path.join(version_dir, name) for name in sorted(os.listdir(version_dir)) if name.endswith(".metal")]
++    # Independent sources; ordered map preserves the serial table exactly.
++    workers = max(1, min(4, int(os.environ.get("J", "4"))))
++    with multiprocessing.Pool(workers) as pool:
++        keys = [key for key in pool.map(shader_needs_guard, paths, chunksize=32) if key]
+     os.makedirs(os.path.dirname(output), exist_ok=True)
+     with open(output, "w", encoding="utf-8", newline="") as stream:
+         stamp = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+--- a/dm/gfx/tools/dmsh_build.py
++++ b/dm/gfx/tools/dmsh_build.py
+@@ -805,6 +805,15 @@
+     r = subprocess.run(['spirv-cross', *XC, os.path.join(w, key + '.spv'), '--output', msl], capture_output=True, text=True)
+     if r.returncode: return 'MSL failed', r.stderr.strip()[:160], None
+     src = open(msl).read()
++    # Before MSL 3.1 SPIRV-Cross emulates image atomics with a buffer, but its
++    # emulation only flattens 2D coordinates. A 3D image leaves int3 as an array
++    # subscript. Use native texture atomics for these shaders; other MSL stays
++    # byte-identical and can reuse the content-addressed Metal compile cache.
++    if any(re.search(r'\b' + re.escape(name) + r'_atomic\b', src)
++           for name in re.findall(r'\btexture3d<[^;\n]+>\s+(\w+)\s*\[\[id\(', src)):
++        r = subprocess.run(['spirv-cross', *XC, '--msl-version', '30100', os.path.join(w, key + '.spv'), '--output', msl], capture_output=True, text=True)
++        if r.returncode: return 'MSL failed', r.stderr.strip()[:160], None
++        src = open(msl).read()
+     if j['stage'] == 'vs':   # second pass: re-translate with inputs that are only used as integers reported as uint (see int_inputs)
+         extra = {l: t for l, t in int_inputs(src).items() if l not in j['attr']}
+         if extra:
+--- a/dm/gfx/tools/dmsh_chain.py
++++ b/dm/gfx/tools/dmsh_chain.py
+@@ -62,14 +62,14 @@
+ 
+ def sha16(p): return hashlib.sha256(open(p, 'rb').read()).hexdigest()[:16]
+ 
+-def tools_now():
++def tools_now(include_ios=True):
+     """Actual tool fingerprints: translator dll (including the Ryujinx shader library), spirv-cross, metal compiler (macOS / iOS)"""
+     t = {}
+     for dll in ('dmsh_xlate.dll', 'Ryujinx.Graphics.Shader.dll', 'Ryujinx.Common.dll'): t[dll] = sha16(os.path.join(XLATE_DIR, dll))
+     t['xlate_source'] = subprocess.run([os.path.join(XLATE_DIR, 'dmsh_xlate'), '--source-sha'], capture_output=True, text=True).stdout.strip()
+     sc = subprocess.run(['which', 'spirv-cross'], capture_output=True, text=True).stdout.strip()
+     t['spirv-cross'] = sha16(sc) if sc else 'missing'
+-    for sdk in ('macosx', 'iphoneos'):
++    for sdk in ('macosx', 'iphoneos') if include_ios else ('macosx',):
+         t['metal_' + sdk] = subprocess.run(['xcrun', '-sdk', sdk, 'metal', '--version'], capture_output=True, text=True).stdout.splitlines()[0:1] or ['missing']
+         t['metal_' + sdk] = t['metal_' + sdk][0]
+     return t
+@@ -79,7 +79,7 @@
+ 
+ def check_tools():
+     want = dict(l.rstrip('\n').split('\t', 1) for l in open(LOCK) if '\t' in l and not l.startswith('#'))
+-    now = tools_now(); bad = [f'{k}: lock {want.get(k)} / actual {v}' for k, v in now.items() if want.get(k) != v]
++    now = tools_now(include_ios=bool(os.environ.get('IOSOUT'))); bad = [f'{k}: lock {want.get(k)} / actual {v}' for k, v in now.items() if want.get(k) != v]
+     if now['xlate_source'] != xlate_source_sha(): bad.append(f'the translator was not built from the in-repo source: embedded source {now["xlate_source"]} / in repo {xlate_source_sha()} (rebuild dmsh_xlate)')
+     return bad
+ 
+--- a/dm/gfx/tools/shader_split.py
++++ b/dm/gfx/tools/shader_split.py
+@@ -973,6 +973,15 @@
+     """→ (relative path, {key: …}, pairs, extra); extra = this file's Unity type trees, or 'defer' (no type tree, scanned again in the second pass)"""
+     path, rel = args[:2]
+     stem, ext = os.path.splitext(path)
++    # IoStore shader libraries are decoded above through their TOC, including
++    # both compression layers. Scanning the opaque payload again can allocate
++    # the entire multi-GB container and cannot replace that format-aware read.
++    if ext == '.ucas':
++        toc = re.sub(r'_s\d+$', '', stem) + '.utoc'
++        if os.path.isfile(toc):
++            with open(toc, 'rb') as f:
++                if f.read(16) == uepak.TOC_MAGIC:
++                    return rel, {}, set(), {}
+     if ext in ('.data', '.patch', '.debug', '.nxpc') and os.path.exists(stem + '.dict'): return rel, {}, set(), {}   # read through its Next Level Games index (nlg_shaders)
+     with open(path, 'rb') as f: head = f.read(16)
+     found = []; trees = {}
+--- a/dm/host/Makefile
++++ b/dm/host/Makefile
+@@ -50,7 +50,7 @@
+ endif
+ .PHONY: FORCE
+ FORCE:
+-dmhost: $(SRC) $(GFX) ../third_party/stb_vorbis/stb_vorbis.c dm.h hle.h dm_input.h front.h $(GFX_H) $(GAME_H) $(GAME_STAMP) $(VPX_LIB)
++dmhost: $(SRC) $(GFX) ../third_party/stb_vorbis/stb_vorbis.c dm.h hle.h dm_input.h front_mac_input.h front.h $(GFX_H) $(GAME_H) $(GAME_STAMP) $(VPX_LIB)
+ 	clang $(CFLAGS) -I../gfx/nvn/include -I../third_party/vulkan-headers/include -I$(dir $(GAME_H)) -I$(VPX) -I../third_party/stb_vorbis -fobjc-arc -o $@ $(SRC) $(GFX) $(VPX_LIB) -framework Cocoa -framework QuartzCore -framework Metal -framework GameController -framework AudioToolbox -framework VideoToolbox -framework CoreMedia -framework CoreVideo -framework ImageIO -framework UniformTypeIdentifiers
+ clean:   # the host and everything make generates for it (gen/: the profile headers, the game stamp and the libvpx build; dmhost_* and *.dSYM beside them, as in .gitignore)
+ 	rm -rf gen dmhost dmhost_* *.dSYM
+--- a/dm/host/front_mac.m
++++ b/dm/host/front_mac.m
+@@ -1,69 +1,131 @@
+ // Mac front end: with DM_WINDOW=1 open a window (CAMetalLayer, for the graphics backend to present frames) + keyboard and controllers → dm_input; the guest runs on a large-stack thread instead and the main thread belongs to AppKit.
+ // Without DM_WINDOW: the guest runs directly on the current thread, behaving the same as with no front end (windowless tests use this).
+ // The window is fullscreen-capable (the green button and ⌃⌘F); DM_FULLSCREEN starts it that way. ⌘Q quits; the left mouse button is the touchscreen.
+-// Key map (Nintendo layout): WASD left stick, arrow keys D-pad, J=A K=B U=X I=Y, Q=L E=R, Z=ZL C=ZR, F=press left stick G=press right stick, Return=+ Tab=−, Space=shake the controller.
+-// Controllers: buttons by position as on the iPhone (right A, bottom B, top X, left Y), shoulders L R, triggers ZL ZR, Menu + Options −, both sticks and their presses.
++// Keyboard: WASD left stick, arrows D-pad, Option+arrows/keypad right stick; J/Space=A K/Escape=B U=X I=Y.
++// Controllers: Xbox A/B/X/Y follow their letters; Nintendo-labelled pads retain their own layout. F1 opens the full guide.
+ #import <Cocoa/Cocoa.h>
+ #import <QuartzCore/CAMetalLayer.h>
+ #import <Metal/Metal.h>
+ #import <GameController/GameController.h>
+ #include "dm.h"
+ #include "dm_input.h"
++#include "front_mac_input.h"
+ #include "front.h"
+ #include "hle.h"
+ #include <signal.h>
+ 
+ static CAMetalLayer *g_layer;
+-static uint64_t g_btn;
+-static int g_w, g_a, g_s, g_d;
++static uint8_t g_keys[128];
++static int g_option;
++static __weak NSWindow *g_game_window;
++static void show_controls(void);
++static NSTextField *g_hint_label;
++static NSLayoutConstraint *g_hint_height;
++static NSMenuItem *g_hint_menu_item;
++static NSMenuItem *g_fps_30, *g_fps_60;
++static NSDictionary *g_hint_strings;
++static NSString *g_input_kind = @"keyboard";
++static int g_hints_visible = 1;
++
++static void hints_update(NSString *kind) {
++    g_input_kind = kind;
++    NSString *text = g_hint_strings[kind];
++    if (!text) {
++        if ([kind isEqualToString:@"switch"]) text = @"Switch Pro   A: Confirm   B: Back   X / Y   L / R   ZL / ZR   +: Menu   -: View\nLeft / right sticks   D-pad   L3 / R3   F1: Full guide   F2: Hide hints";
++        else if ([kind isEqualToString:@"xbox"]) text = @"Xbox   A: Confirm   B: Back   X / Y   LB / RB   LT / RT   Menu / View\nLeft / right sticks   D-pad   L3 / R3   F1: Full guide   F2: Hide hints";
++        else text = @"Keyboard   A: J / Space   B: K / Esc   X: U   Y: I   L/R: Q/E   ZL/ZR: Z/C\nMove: WASD   Right stick: Option + arrows   D-pad: arrows   L3/R3: F/G   +: Return   -: Tab   F1: Guide   F2: Hide hints";
++    }
++    g_hint_label.stringValue = text;
++}
++static void hints_toggle(void) {
++    g_hints_visible = !g_hints_visible;
++    g_hint_height.constant = g_hints_visible ? 64 : 0;
++    g_hint_label.hidden = !g_hints_visible;
++    g_hint_menu_item.state = g_hints_visible ? NSControlStateValueOn : NSControlStateValueOff;
++}
+ 
+ void *front_metal_layer(void) { return (__bridge void *)g_layer; }
+ static _Atomic int g_screen_fps;   // the window's screen's maximumFramesPerSecond, kept up to date when the window moves to another screen
+ int front_screen_max_fps(void) { return g_screen_fps; }
+ static void push(void) {
+-    int32_t lx = (g_d - g_a) * 32767, ly = (g_w - g_s) * 32767;
+-    dm_input_set(g_btn, lx, ly, 0, 0);
+-}
+-static int key_bit(unsigned short code) {
+-    switch (code) {
+-        case 38: return 0;  case 40: return 1;  case 32: return 2;  case 34: return 3;    // J K U I → A B X Y
+-        case 3: return 4;   case 5: return 5;                                            // F G → press stick
+-        case 12: return 6;  case 14: return 7;  case 6: return 8;   case 8: return 9;    // Q E Z C → L R ZL ZR
+-        case 36: return 10; case 48: return 11;                                          // Return Tab → + −
+-        case 123: return 12; case 126: return 13; case 124: return 14; case 125: return 15; // ← ↑ → ↓
+-    }
+-    return -1;
++    dm_mac_input s = dm_mac_keyboard(g_keys, g_option);
++    dm_input_set(s.buttons, s.lx, s.ly, s.rx, s.ry);
+ }
+ static void on_key(NSEvent *e, int down) {
+-    unsigned short c = e.keyCode;
+-    switch (c) { case 13: g_w = down; break; case 0: g_a = down; break; case 1: g_s = down; break; case 2: g_d = down; break; }
+-    int b = key_bit(c);
+-    uint64_t m = b >= 0 ? 1ull << b : c == 49 ? DM_BTN_SHAKE : 0;   // Space: shaken while held
+-    g_btn = down ? (g_btn | m) : (g_btn & ~m);
++    if (e.keyCode < 128) g_keys[e.keyCode] = down;
++    g_option = (e.modifierFlags & NSEventModifierFlagOption) != 0;
+     push();
+-}
++    if (down) hints_update(@"keyboard");
++}
++static void keys_clear(void) { memset(g_keys, 0, sizeof g_keys); g_option = 0; push(); }
+ 
+ // Physical controllers (GameController) go to dm_pad_set, as the iPhone's do (DmGamepad.m read_pad, same layout): ORed with the keyboard, a non-zero stick wins.
+ // DM_KEYS uses the same path, so a controller touched during a script takes it over
+-static int32_t pad_axis(float v) { return (int32_t)(fmaxf(-1.f, fminf(1.f, v)) * DM_STICK_MAX); }
++static int pad_nintendo(GCExtendedGamepad *g) {
++    NSString *name = g.controller.vendorName.lowercaseString ?: @"";
++    return ([g.buttonA.sfSymbolsName.lowercaseString hasPrefix:@"b."] && [g.buttonB.sfSymbolsName.lowercaseString hasPrefix:@"a."]) ||
++           [name containsString:@"nintendo"] || [name containsString:@"joy-con"] || [name containsString:@"switch pro"] || [name isEqualToString:@"pro controller"];
++}
+ static void pad_read(GCExtendedGamepad *g) {
+-    uint64_t m = 0;
++    if (!g_game_window.keyWindow) { dm_pad_set(0, 0, 0, 0, 0); return; }
++    int nintendo = pad_nintendo(g);
++    uint64_t m = dm_mac_face_buttons(g.buttonA.isPressed, g.buttonB.isPressed, g.buttonX.isPressed, g.buttonY.isPressed, nintendo);
+     #define K(btn, bit) if (btn.isPressed) m |= bit
+-    K(g.buttonB, DM_BTN_A); K(g.buttonA, DM_BTN_B); K(g.buttonY, DM_BTN_X); K(g.buttonX, DM_BTN_Y);   // by position: right A, bottom B, top X, left Y
+     K(g.leftShoulder, DM_BTN_L); K(g.rightShoulder, DM_BTN_R); K(g.leftTrigger, DM_BTN_ZL); K(g.rightTrigger, DM_BTN_ZR);
+     K(g.buttonMenu, DM_BTN_PLUS); K(g.buttonOptions, DM_BTN_MINUS); K(g.leftThumbstickButton, DM_BTN_LS); K(g.rightThumbstickButton, DM_BTN_RS);   // nil on pads without them: not pressed
+     K(g.dpad.left, DM_BTN_LEFT); K(g.dpad.up, DM_BTN_UP); K(g.dpad.right, DM_BTN_RIGHT); K(g.dpad.down, DM_BTN_DOWN);
+     #undef K
+-    dm_pad_set(m, pad_axis(g.leftThumbstick.xAxis.value), pad_axis(g.leftThumbstick.yAxis.value), pad_axis(g.rightThumbstick.xAxis.value), pad_axis(g.rightThumbstick.yAxis.value));
++    int32_t lx = dm_mac_pad_axis(g.leftThumbstick.xAxis.value), ly = dm_mac_pad_axis(g.leftThumbstick.yAxis.value);
++    int32_t rx = dm_mac_pad_axis(g.rightThumbstick.xAxis.value), ry = dm_mac_pad_axis(g.rightThumbstick.yAxis.value);
++    dm_pad_set(m, lx, ly, rx, ry);
++    // Idle drift and connection polling must not steal the keyboard's active-device hints.
++    if (m || lx || ly || rx || ry) hints_update(nintendo ? @"switch" : @"xbox");
+ }
+ static void pads_changed(void) {   // every connected pad reports (the last one moved wins); when the last one goes away its buttons and sticks are released
+     int any = 0;
+     for (GCController *c in GCController.controllers) if (c.extendedGamepad) {
++        c.handlerQueue = dispatch_get_main_queue();
+         any = 1; c.extendedGamepad.valueChangedHandler = ^(GCExtendedGamepad *g, GCControllerElement *el) { (void)el; pad_read(g); };
+         pad_read(c.extendedGamepad);
+     }
+-    if (!any) dm_pad_set(0, 0, 0, 0, 0);
+-}
++    if (!any) { dm_pad_set(0, 0, 0, 0, 0); hints_update(@"keyboard"); }
++}
++
++static void show_controls(void) {
++    keys_clear(); dm_pad_set(0, 0, 0, 0, 0);
++    NSString *path = [NSBundle.mainBundle pathForResource:@"controls-guide" ofType:@"txt"];
++    NSString *guide = path ? [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:NULL] : nil;
++    if (!guide) guide = @"Switch / Keyboard / Xbox\nA: J or Space / A\nB: K or Escape / B\nX: U / X    Y: I / Y\nLeft stick: WASD\nRight stick: Option + arrows or keypad 4/6/8/2\nD-pad: arrows\nL/R: Q/E / LB/RB\nZL/ZR: Z/C / LT/RT\nL3/R3: F/G\nPlus: Return / Menu\nMinus: Tab / View\n";
++    NSMutableArray *names = [NSMutableArray new];
++    for (GCController *c in GCController.controllers) if (c.extendedGamepad) [names addObject:c.vendorName ?: @"Gamepad"];
++    NSAlert *alert = [NSAlert new]; alert.messageText = @"Keyboard & Xbox Controls";
++    alert.informativeText = names.count ? [@"Connected: " stringByAppendingString:[names componentsJoinedByString:@", "]] : @"No controller connected. Pair it in macOS, then return to the game.";
++    NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 680, 430)];
++    scroll.hasVerticalScroller = YES;
++    NSTextView *text = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, 660, 600)];
++    text.editable = NO; text.selectable = YES; text.font = [NSFont monospacedSystemFontOfSize:14 weight:NSFontWeightRegular];
++    text.textContainerInset = NSMakeSize(10, 10); text.string = guide;
++    scroll.documentView = text; alert.accessoryView = scroll; [alert addButtonWithTitle:@"Back to Game"];
++    [alert runModal];
++    [g_game_window makeKeyAndOrderFront:nil]; pads_changed();
++}
++
++@interface DmControlsAction : NSObject
++- (void)show:(id)sender;
++- (void)toggleHints:(id)sender;
++- (void)setFrameRate:(NSMenuItem *)sender;
++@end
++@implementation DmControlsAction
++- (void)show:(id)sender { (void)sender; show_controls(); }
++- (void)toggleHints:(id)sender { (void)sender; hints_toggle(); }
++- (void)setFrameRate:(NSMenuItem *)sender {
++    int target = (int)sender.tag;
++    if (!dm_fps_lock_set_target(target)) return;
++    g_fps_30.state = target == 30 ? NSControlStateValueOn : NSControlStateValueOff;
++    g_fps_60.state = target == 60 ? NSControlStateValueOn : NSControlStateValueOff;
++    [NSUserDefaults.standardUserDefaults setInteger:target forKey:@"EngineFrameRateTarget"];
++}
++@end
+ 
+ // Mouse as a single-point touchscreen (front.h dm_touch_set): left button down / drag = finger 0, release = lifted. The content view takes the clicks,
+ // not a window-wide event monitor, so clicks on the title bar, the window buttons and the resize edges still reach AppKit.
+@@ -112,11 +174,35 @@
+         NSWindow *win = [[NSWindow alloc] initWithContentRect:r
+                                                     styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable
+                                                       backing:NSBackingStoreBuffered defer:NO];
++        g_game_window = win;
+         win.title = @DM_GAME_NAME;   // the game profile's name (game name label)
+         // Fullscreen: without FullScreenPrimary the green button only zooms the window. The present path already scales
+         // the game picture to fit the drawable with black bars around it, so fullscreen keeps the game's aspect ratio.
+         win.collectionBehavior = NSWindowCollectionBehaviorFullScreenPrimary;
+-        NSView *v = win.contentView = [[DmGameView alloc] initWithFrame:r];
++        win.contentMinSize = NSMakeSize(800, 450);
++        NSView *container = win.contentView;
++        NSView *v = [[DmGameView alloc] initWithFrame:r];
++        v.translatesAutoresizingMaskIntoConstraints = NO;
++        [container addSubview:v];
++        NSVisualEffectView *hint_bar = [NSVisualEffectView new];
++        hint_bar.material = NSVisualEffectMaterialContentBackground; hint_bar.blendingMode = NSVisualEffectBlendingModeWithinWindow;
++        hint_bar.translatesAutoresizingMaskIntoConstraints = NO; [container addSubview:hint_bar];
++        g_hint_label = [NSTextField wrappingLabelWithString:@""];
++        g_hint_label.font = [NSFont systemFontOfSize:12]; g_hint_label.translatesAutoresizingMaskIntoConstraints = NO;
++        g_hint_label.maximumNumberOfLines = 3; [hint_bar addSubview:g_hint_label];
++        g_hint_height = [hint_bar.heightAnchor constraintEqualToConstant:64];
++        [NSLayoutConstraint activateConstraints:@[
++            [v.leadingAnchor constraintEqualToAnchor:container.leadingAnchor], [v.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
++            [v.topAnchor constraintEqualToAnchor:container.topAnchor], [v.bottomAnchor constraintEqualToAnchor:hint_bar.topAnchor],
++            [hint_bar.leadingAnchor constraintEqualToAnchor:container.leadingAnchor], [hint_bar.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
++            [hint_bar.bottomAnchor constraintEqualToAnchor:container.bottomAnchor], g_hint_height,
++            [g_hint_label.leadingAnchor constraintEqualToAnchor:hint_bar.leadingAnchor constant:12], [g_hint_label.trailingAnchor constraintEqualToAnchor:hint_bar.trailingAnchor constant:-12],
++            [g_hint_label.centerYAnchor constraintEqualToAnchor:hint_bar.centerYAnchor]
++        ]];
++        NSString *hints_path = [NSBundle.mainBundle pathForResource:@"controls-hints" ofType:@"json"];
++        NSData *hints_data = hints_path ? [NSData dataWithContentsOfFile:hints_path] : nil;
++        if (hints_data) g_hint_strings = [NSJSONSerialization JSONObjectWithData:hints_data options:0 error:NULL];
++        hints_update(@"keyboard");
+         v.wantsLayer = YES;
+         g_layer = [CAMetalLayer layer];
+         g_layer.device = MTLCreateSystemDefaultDevice();
+@@ -135,16 +221,55 @@
+         [[bar addItemWithTitle:@"Window" action:nil keyEquivalent:@""] setSubmenu:wm];
+         [wm addItemWithTitle:@"Enter Full Screen" action:@selector(toggleFullScreen:) keyEquivalent:@"f"].keyEquivalentModifierMask = NSEventModifierFlagControl | NSEventModifierFlagCommand;
+         NSApp.mainMenu = bar;
++        static DmControlsAction *controls_action; controls_action = [DmControlsAction new];
++        NSMenu *controls = [[NSMenu alloc] initWithTitle:@"Controls"];
++        [[bar addItemWithTitle:@"Controls" action:nil keyEquivalent:@""] setSubmenu:controls];
++        NSMenuItem *guide_item = [controls addItemWithTitle:@"Keyboard & Xbox Controls..." action:@selector(show:) keyEquivalent:@""];
++        guide_item.target = controls_action;
++        g_hint_menu_item = [controls addItemWithTitle:@"Show Active Input Hints" action:@selector(toggleHints:) keyEquivalent:@""];
++        g_hint_menu_item.target = controls_action; g_hint_menu_item.state = NSControlStateValueOn;
++        if (dm_fps_lock_supported()) {
++            NSMenu *performance = [[NSMenu alloc] initWithTitle:@"Performance"];
++            const char *follow_env = getenv("DM_FPS_FOLLOW_GAME");
++            BOOL follow_game = follow_env && !strcmp(follow_env, "1");
++            performance.autoenablesItems = NO;
++            [[bar addItemWithTitle:@"Performance" action:nil keyEquivalent:@""] setSubmenu:performance];
++            if (follow_game) {
++                [performance addItemWithTitle:@"Change frame rate in Game Options > Display" action:nil keyEquivalent:@""].enabled = NO;
++                [performance addItem:NSMenuItem.separatorItem];
++            }
++            g_fps_30 = [performance addItemWithTitle:@"30 FPS" action:@selector(setFrameRate:) keyEquivalent:@""];
++            g_fps_60 = [performance addItemWithTitle:@"60 FPS (Experimental)" action:@selector(setFrameRate:) keyEquivalent:@""];
++            g_fps_30.target = controls_action; g_fps_30.tag = 30;
++            g_fps_60.target = controls_action; g_fps_60.tag = 60;
++            g_fps_30.enabled = g_fps_60.enabled = !follow_game;
++            int saved = (int)[NSUserDefaults.standardUserDefaults integerForKey:@"EngineFrameRateTarget"];
++            const char *fps_env = getenv("DM_FPS_TARGET");
++            int selected = fps_env ? atoi(fps_env) : saved ? saved : DM_GAME_FPS_TARGET;
++            // Explicit test/launcher overrides take precedence over a saved interactive preference.
++            if (!follow_game && !fps_env && (saved == 30 || saved == 60)) dm_fps_lock_set_target(saved);
++            g_fps_30.state = selected == 60 ? NSControlStateValueOff : NSControlStateValueOn;
++            g_fps_60.state = selected == 60 ? NSControlStateValueOn : NSControlStateValueOff;
++            if (follow_game) [NSTimer scheduledTimerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *timer) {
++                (void)timer; int fps = dm_fps_lock_get_target();
++                g_fps_30.state = fps == 30 ? NSControlStateValueOn : NSControlStateValueOff;
++                g_fps_60.state = fps == 60 ? NSControlStateValueOn : NSControlStateValueOff;
++            }];
++        }
+         if (getenv("DM_FULLSCREEN")) dispatch_async(dispatch_get_main_queue(), ^{ [win toggleFullScreen:nil]; });   // start in fullscreen
+         for (NSNotificationName nm in @[GCControllerDidConnectNotification, GCControllerDidDisconnectNotification])
+             [NSNotificationCenter.defaultCenter addObserverForName:nm object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
+                 GCController *c = n.object; LOG("controller %s: %s%s", n.name == GCControllerDidConnectNotification ? "connected" : "disconnected",
+                                                 c.vendorName.UTF8String ?: "?", c.extendedGamepad ? "" : " (no extended gamepad profile: not used)");
++                if (n.name == GCControllerDidDisconnectNotification) hints_update(@"keyboard");
+                 pads_changed(); }];
+         pads_changed();
+-        [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown | NSEventMaskKeyUp handler:^NSEvent *(NSEvent *e) {
++        [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskFlagsChanged handler:^NSEvent *(NSEvent *e) {
+             if (e.window != win) return e;   // Only swallow keys for the game window; other windows such as the software keyboard input box receive typing as usual
++            if (e.type == NSEventTypeFlagsChanged) { g_option = (e.modifierFlags & NSEventModifierFlagOption) != 0; push(); return e; }
+             if (e.type == NSEventTypeKeyDown && (e.modifierFlags & NSEventModifierFlagCommand)) return e;   // ⌘ shortcuts go to the menu; a key released while ⌘ is held still reaches the game, or it would stay pressed
++            if (e.type == NSEventTypeKeyDown && e.keyCode == 122 && !e.isARepeat) { show_controls(); return nil; }
++            if (e.type == NSEventTypeKeyDown && e.keyCode == 120 && !e.isARepeat) { hints_toggle(); return nil; }
+             if (!e.isARepeat) on_key(e, e.type == NSEventTypeKeyDown);
+             return nil;   // Swallow it to avoid the system beep
+         }];
+@@ -157,8 +282,8 @@
+         // content view by itself; only the scale factor has to be carried over to the screen the window ended up on.
+         [nc addObserverForName:NSWindowDidEnterFullScreenNotification object:win queue:nil usingBlock:^(NSNotification *n) { (void)n; g_layer.contentsScale = win.backingScaleFactor; }];
+         [nc addObserverForName:NSWindowDidExitFullScreenNotification object:win queue:nil usingBlock:^(NSNotification *n) { (void)n; g_layer.contentsScale = win.backingScaleFactor; }];
+-        [nc addObserverForName:NSWindowDidResignKeyNotification object:win queue:nil usingBlock:^(NSNotification *n) { (void)n; if (!win.miniaturized) dm_focus_set(2); }];
+-        [nc addObserverForName:NSWindowDidBecomeKeyNotification object:win queue:nil usingBlock:^(NSNotification *n) { (void)n; dm_focus_set(1); }];
++        [nc addObserverForName:NSWindowDidResignKeyNotification object:win queue:nil usingBlock:^(NSNotification *n) { (void)n; keys_clear(); dm_pad_set(0, 0, 0, 0, 0); if (!win.miniaturized) dm_focus_set(2); }];
++        [nc addObserverForName:NSWindowDidBecomeKeyNotification object:win queue:nil usingBlock:^(NSNotification *n) { (void)n; dm_focus_set(1); pads_changed(); }];
+         [nc addObserverForName:NSWindowDidMiniaturizeNotification object:win queue:nil usingBlock:^(NSNotification *n) { (void)n; dm_focus_set(3); dm_audio_suspend(1); dm_gfx_suspend(1); }];
+         [nc addObserverForName:NSWindowDidDeminiaturizeNotification object:win queue:nil usingBlock:^(NSNotification *n) { (void)n; dm_gfx_suspend(0); dm_audio_suspend(0); dm_focus_set(2); }];
+         // Guest thread: 64 MiB stack (the Switch main thread stack is specified by npdm; the host gives plenty)
+--- a/dm/host/hle.h
++++ b/dm/host/hle.h
+@@ -53,6 +53,10 @@
+ void dm_focus_set(int st);
+ // Audio pause / resume following the lifecycle (called by the front end on going to background / returning to foreground)
+ extern uint8_t *dm_fps_state;   // frame step state page (loader.c install_fps_state): +0 float target fps, +4 movie flag, +0x10 float render scale, +0x18 double game seconds stepped; NULL when the build has none
++// Runtime engine frame caps, only for exact build IDs supported by hle_fpslock.c.
++int dm_fps_lock_supported(void);
++int dm_fps_lock_set_target(int fps);
++int dm_fps_lock_get_target(void);
+ void dm_audio_suspend(int on);
+ uint64_t dm_audio_render_calls(void);   // Cumulative sound card callback count (the silent sink is not counted)
+ void dm_audio_reset(void);   // iOS media services reset: recreate the AudioUnits (hle_audio.c)
+--- a/dm/host/hle_audio.c
++++ b/dm/host/hle_audio.c
+@@ -123,6 +123,7 @@
+     (void)f; (void)ts; (void)bus; (void)frames;
+     aout *a = ctx;
+     atomic_fetch_add_explicit(&g_render_calls, 1, memory_order_relaxed); atomic_fetch_add_explicit(&a->cb_n, 1, memory_order_relaxed);
++    if (!a->st_calls && getenv("DM_AUDIO_DIAG")) LOG("audio #%d callback layout: frames %u, buffers %u, channels %u, data bytes %u, expected bytes %u", a->id, (unsigned)frames, (unsigned)bl->mNumberBuffers, (unsigned)bl->mBuffers[0].mNumberChannels, (unsigned)bl->mBuffers[0].mDataByteSize, (unsigned)(frames * 2u * a->ch));
+     {
+         // Every 2000 callbacks of each output, log one line: frames requested per call, pending blocks at callback start, underruns (check this line on a new device; docs/agents/03-bringup.md "Crackling on iOS only").
+         // Kept per output: with two outputs open, combined numbers mislead (one fully fed and one fed by nobody look like "every other callback underruns")
+@@ -342,6 +343,8 @@
+     // cross-correlate the original game's audio against it (this is how the tier-one drop sound was verified). The file is opened only when the variable is set; when unset this costs only one extra cached check
+     { static FILE *df; static int on = -1; if (on < 0) { const char *e = getenv("DM_AUDIO_DUMP"); on = e != NULL; if (on && !(df = fopen(e, "wb"))) LOG("[RED] DM_AUDIO_DUMP cannot open %s", e); }
+       if (df && b && b->ptr && b->size) fwrite(b->ptr, 1, (size_t)b->size, df); }
++    { static _Atomic unsigned counts[AOMAX]; static int diag = -1; if (diag < 0) diag = getenv("DM_AUDIO_DIAG") != NULL;
++      if (diag && a->id < AOMAX && atomic_fetch_add(&counts[a->id], 1) < 12) LOG("audio #%d append layout: channels %d, capacity %llu, data bytes %llu, frames %.3f", a->id, a->ch, (unsigned long long)b->cap, (unsigned long long)b->size, b->size / (2.0 * a->ch)); }
+     pthread_mutex_lock(&a->m);
+     uint32_t qt = atomic_load_explicit(&a->q_tail, memory_order_relaxed);
+     uint32_t qh = atomic_load_explicit(&a->q_head, memory_order_acquire);
+--- a/dm/host/hle_fpslock.c
++++ b/dm/host/hle_fpslock.c
+@@ -3,6 +3,7 @@
+ // (hle_nvn.c); the game sets the values after boot and may set them again, so each is written whenever it differs. Fixed addresses: each row runs only on the main build it was found in (AGENTS.md)
+ #include "hle.h"
+ #include <mach/mach.h>
++#include <stdatomic.h>
+ 
+ // What a field holds: the frame rate as a float, vsyncs per frame (60 / frame rate) as an int32, or the frame time in milliseconds as a float. Copies: consecutive copies of the value
+ // (Unreal keeps one for the game thread, one for the render thread). A row with no pointer (ptr_off 0) has its field at main + field: a constant in main's read-only data, which the loader
+@@ -41,6 +42,10 @@
+     // (BaseSwitchDeviceProfiles.ini). Registered at main+0x33a4dec (float, IConsoleManager slot 2; AsVariableFloat stored at +0x10) and main+0x149e0bc (int, slot 1; AsVariableInt at +0x10)
+     { "84e182f72ee1da4f477804bd05b54c15", "Unreal t.MaxFPS", 0x8c29af0 + 0x10, 0, FPS_F32, 2 },
+     { "84e182f72ee1da4f477804bd05b54c15", "Unreal rhi.SyncInterval", 0x8adca10 + 0x10, 0, VSYNCS_I32, 2 },
++    // HK 1.0.1: independently traced UTF-16 names in this build's hash-verified NSO. Registration at the same instruction offsets,
++    // with AsVariableInt/Float stored at +0x10 and globals 0x8adca10 / 0x8c29af0; never inherit the other region's build gate.
++    { "b7f965b9d7227db8e29f04e84ea7331b", "Unreal t.MaxFPS", 0x8c29af0 + 0x10, 0, FPS_F32, 2 },
++    { "b7f965b9d7227db8e29f04e84ea7331b", "Unreal rhi.SyncInterval", 0x8adca10 + 0x10, 0, VSYNCS_I32, 2 },
+     // Luigi's Mansion 3 1.4.0: Next Level Games' frame limiter. At the end of each frame the main thread calls the frame callbacks (main+0xb7c308) with the milliseconds since the frame
+     // started; the limiter (main+0x7a3e70) runs jobs or sleeps until 33.333 ms have passed, the float at main+0x13c94dc (read only there, at main+0x7a3ea8 and main+0x7a3f18), and the game
+     // steps by the time that really passed. The game asks for present interval 2 too, which the profile's present_interval display ignores; both are needed
+@@ -50,8 +55,22 @@
+ 
+ static int rd(uint64_t a, void *out, size_t n) { vm_size_t got = 0; return a >= 0x1000 && vm_read_overwrite(mach_task_self(), (vm_address_t)a, n, (vm_address_t)out, &got) == KERN_SUCCESS && got == n; }
+ 
++// Front ends request a supported target atomically; guest memory is only changed on the present thread.
++static _Atomic int g_runtime_target = -1;
++static _Atomic int g_observed_target;
++int dm_fps_lock_get_target(void) { return atomic_load(&g_observed_target); }
++int dm_fps_lock_supported(void) {
++    for (int i = 0; i < g_nmod; i++) if (!strcmp(g_mod[i].name, "main"))
++        for (int k = 0; k < NLOCKS; k++) if (!strcmp(g_mod[i].build_id, k_locks[k].build)) return 1;
++    return 0;
++}
++int dm_fps_lock_set_target(int fps) {
++    if ((fps != 30 && fps != 60) || !dm_fps_lock_supported()) return 0;
++    atomic_store(&g_runtime_target, fps); return 1;
++}
++
+ void dm_fps_lock_tick(void) {
+-    static int state = -2, rows[NLOCKS], nrow, nlog[NLOCKS], target; static uint8_t *base; static const char *src;
++    static int state = -2, rows[NLOCKS], nrow, nlog[NLOCKS], target, follow_game; static uint8_t *base; static const char *src;
+     if (state == -1) return;
+     if (state == -2) {
+         state = -1;
+@@ -59,12 +78,33 @@
+             for (int k = 0; k < NLOCKS; k++) if (!strcmp(g_mod[i].build_id, k_locks[k].build)) { rows[nrow++] = k; base = g_mod[i].base; }
+         if (!nrow) return;
+         const char *e = getenv("DM_FPS_TARGET"); int t = e ? atoi(e) : DM_GAME_FPS_TARGET; src = e ? "DM_FPS_TARGET" : "game profile fps_target";
++        const char *follow = getenv("DM_FPS_FOLLOW_GAME"); follow_game = follow && !strcmp(follow, "1");
++        if (follow_game) { t = 0; src = "game options"; }
+         if (t != 0 && t != 30 && t != 60) { LOG("[RED] DM_FPS_TARGET=%s: must be 0, 30 or 60; leaving the game's frame limit", e); t = 0; }
+-        if (!t) { for (int r = 0; r < nrow; r++) LOG("main: %s left as the game sets it (%s)", k_locks[rows[r]].what, src); return; }
++        if (!t) for (int r = 0; r < nrow; r++) LOG("main: %s left as the game sets it (%s)", k_locks[rows[r]].what, src);
+         target = t; state = 0;
+     }
++    int requested = atomic_load(&g_runtime_target);
++    if (!follow_game && requested >= 0 && requested != target) {
++        target = requested; src = "Mac FPS control";
++        LOG("main: engine frame target changed to %d fps", target);
++    }
++    // A native game menu owns its saved frame limit. Follow that float instead of fighting it on every present;
++    // the matching vsync rows still need to follow, because changing t.MaxFPS alone leaves a two-vsync cap.
++    if (follow_game) for (int r = 0; r < nrow; r++) {
++        int k = rows[r]; if (k_locks[k].kind != FPS_F32 || !k_locks[k].ptr_off) continue;
++        uint64_t obj; float fps;
++        if (!rd((uint64_t)(uintptr_t)(base + k_locks[k].ptr_off), &obj, sizeof obj) || !obj ||
++            !rd(obj + k_locks[k].field, &fps, sizeof fps)) continue;
++        int next = fps == 30.0f ? 30 : fps == 60.0f ? 60 : 0;
++        if (next != target) { target = next; src = "game options"; LOG("main: following game frame limit %g (%d fps supported target)", fps, target); }
++        break;
++    }
++    atomic_store(&g_observed_target, target);
++    if (!target) return;
+     for (int r = 0; r < nrow; r++) {
+         int k = rows[r]; uint64_t obj = (uint64_t)(uintptr_t)base;
++        if (follow_game && k_locks[k].kind != VSYNCS_I32) continue;
+         if (k_locks[k].ptr_off && (!rd((uint64_t)(uintptr_t)(base + k_locks[k].ptr_off), &obj, sizeof obj) || !obj)) continue;   // not created yet
+         for (int c = 0; c < k_locks[k].copies; c++) {
+             uint64_t a = obj + k_locks[k].field + 4 * (uint64_t)c; uint32_t cur, want; char was[16];
+@@ -121,3 +161,16 @@
+         LOG("DM_CTL: cvari main+%#llx = %d (both copies at %#llx)", (unsigned long long)off, v, (unsigned long long)obj);
+     }
+ }
++
++// "maini <main data offset> <value>": diagnostic for console-variable references backed by a plain int.
++void dm_ctl_main_i32(uint64_t off, int32_t v) {
++    for (int i = 0; i < g_nmod; i++) if (!strcmp(g_mod[i].name, "main")) {
++        if (off < g_mod[i].data_off || off > g_mod[i].size || g_mod[i].size - off < sizeof v) {
++            LOG("DM_CTL: maini offset outside main data"); return;
++        }
++        int32_t *p = (int32_t *)(g_mod[i].base + off), was;
++        if (!rd((uint64_t)(uintptr_t)p, &was, sizeof was)) return;
++        dm_guest_write_prepare(p, sizeof v); __atomic_store_n(p, v, __ATOMIC_RELAXED);
++        LOG("DM_CTL: maini main+%#llx: %d -> %d", (unsigned long long)off, was, v);
++    }
++}
+--- a/dm/host/hle_hid.c
++++ b/dm/host/hle_hid.c
+@@ -130,9 +130,12 @@
+                 if (!strncmp(line, "shot ", 5)) { dm_gfx_shot_at(1, line + 5); LOG("DM_CTL: screenshot of the next frame → %s", line + 5); continue; }
+                 if (!strncmp(line, "texlist ", 8)) { void dm_gfx_texlist(int target); dm_gfx_texlist(atoi(line + 8)); continue; }
+                 if (!strncmp(line, "texraw ", 7)) { void dm_gfx_texraw(uint64_t serial, const char *path); char *e2; uint64_t s = strtoull(line + 7, &e2, 10); while (*e2 == ' ') e2++; dm_gfx_texraw(s, e2); continue; }
++                if (!strncmp(line, "texmips ", 8)) { void dm_gfx_texmips(int tid, const char *path); char *e2; int tid = (int)strtol(line + 8, &e2, 10); while (*e2 == ' ') e2++; dm_gfx_texmips(tid, e2); continue; }
++                if (!strncmp(line, "skipfs ", 7)) { void dm_gfx_skipfs(const char *keys); dm_gfx_skipfs(line + 7); continue; }
+                 if (!strncmp(line, "peek ", 5)) { void dm_ctl_peek(uint64_t a, int n); char *e2; uint64_t a = strtoull(line + 5, &e2, 16); dm_ctl_peek(a, (int)strtol(e2, NULL, 0)); continue; }
+                 if (!strncmp(line, "memdump ", 8)) { void dm_ctl_memdump(uint64_t a, uint64_t n, const char *path); char *e2, *e3; uint64_t a = strtoull(line + 8, &e2, 16), n = strtoull(e2, &e3, 0);
+                                                      while (*e3 == ' ') e3++; dm_ctl_memdump(a, n, e3); continue; }
++                if (!strncmp(line, "maini ", 6)) { void dm_ctl_main_i32(uint64_t off, int32_t v); char *e2; uint64_t off = strtoull(line + 6, &e2, 16); dm_ctl_main_i32(off, (int32_t)strtol(e2, NULL, 0)); continue; }
+                 if (!strncmp(line, "cvari ", 6)) { void dm_ctl_cvar_i32(uint64_t off, int32_t v); char *e2; uint64_t off = strtoull(line + 6, &e2, 16); dm_ctl_cvar_i32(off, (int32_t)strtol(e2, NULL, 0)); continue; }
+                 if (!strncmp(line, "cvarf ", 6)) { void dm_ctl_cvar_f32(uint64_t off, float v); char *e2; uint64_t off = strtoull(line + 6, &e2, 16); dm_ctl_cvar_f32(off, strtof(e2, NULL)); continue; }
+                 if (!strncmp(line, "env ", 4)) { char *eq = strchr(line + 4, '='); if (eq) { *eq = 0; setenv(line + 4, eq + 1, 1); LOG("DM_CTL: env %s=%s", line + 4, eq + 1); } continue; }
+--- a/dm/host/hle_uemalloc.c
++++ b/dm/host/hle_uemalloc.c
+@@ -35,6 +35,10 @@
+     { "f7ec03e4cb9de3bd8319d4e899d2e9cc", "DRAGON QUEST VII Reimagined 1.2.0", UE4_27, 0, 0x5e4c0e8, 0x32758dc },
+     // FINAL FANTASY RESONANCE 1.0.1: the FMallocBinned3 object (main+0x77c6210, bss), its vtable (main+0x67df800, 32 slots), the cut constructor call (main+0x137f0)
+     { "84e182f72ee1da4f477804bd05b54c15", "FINAL FANTASY RESONANCE 1.0.1", UE5_6, 0x77c6210, 0x67df800, 0x137f0 },
++    // HK 1.0.1: independently decoded nninitStartup/BaseAllocator object and constructor vtable assignment;
++    // slots 7/9 delegate to 6/8, slots 11/12 call 6 then clear, and slot 14 writes size through x2.
++    // Exact source instruction e06b0294 is asserted by the HK profile's build-gated rewriter cut.
++    { "b7f965b9d7227db8e29f04e84ea7331b", "FINAL FANTASY RESONANCE HK 1.0.1", UE5_6, 0x77c6210, 0x67df800, 0x137f0 },
+ };
+ enum { NSLOT = 32 };
+ 
+--- /dev/null
++++ b/dm/host/front_mac_input.h
+@@ -0,0 +1,46 @@
++// Pure input translation shared by the Mac front end and its mapping checks.
++#pragma once
++#include "dm_input.h"
++#include <math.h>
++#include <stdint.h>
++
++typedef struct { uint64_t buttons; int32_t lx, ly, rx, ry; } dm_mac_input;
++
++static inline dm_mac_input dm_mac_keyboard(const uint8_t keys[128], int option) {
++    dm_mac_input s = {0};
++    s.lx = (keys[2] - keys[0]) * DM_STICK_MAX;   // D - A
++    s.ly = (keys[13] - keys[1]) * DM_STICK_MAX;  // W - S
++    if (keys[38] || keys[49]) s.buttons |= DM_BTN_A;     // J / Space
++    if (keys[40] || keys[53] || keys[51]) s.buttons |= DM_BTN_B; // K / Escape / Backspace
++    if (keys[32]) s.buttons |= DM_BTN_X; if (keys[34]) s.buttons |= DM_BTN_Y; // U / I
++    if (keys[3]) s.buttons |= DM_BTN_LS; if (keys[5]) s.buttons |= DM_BTN_RS; // F / G
++    if (keys[12]) s.buttons |= DM_BTN_L; if (keys[14]) s.buttons |= DM_BTN_R; // Q / E
++    if (keys[6]) s.buttons |= DM_BTN_ZL; if (keys[8]) s.buttons |= DM_BTN_ZR; // Z / C
++    if (keys[36]) s.buttons |= DM_BTN_PLUS; if (keys[48]) s.buttons |= DM_BTN_MINUS;
++    if (!option) {
++        if (keys[123]) s.buttons |= DM_BTN_LEFT; if (keys[126]) s.buttons |= DM_BTN_UP;
++        if (keys[124]) s.buttons |= DM_BTN_RIGHT; if (keys[125]) s.buttons |= DM_BTN_DOWN;
++    }
++    // Option + arrows works on a MacBook without a numeric keypad; keypad 4/6/8/2 is an alias.
++    int left = keys[86] || (option && keys[123]), right = keys[88] || (option && keys[124]);
++    int up = keys[91] || (option && keys[126]), down = keys[84] || (option && keys[125]);
++    s.rx = (right - left) * DM_STICK_MAX; s.ry = (up - down) * DM_STICK_MAX;
++    if (keys[17]) s.buttons |= DM_BTN_SHAKE; // T: optional motion-sensor shake
++    return s;
++}
++
++// GameController uses Xbox-shaped positions. Nintendo-labelled pads swap both pairs.
++static inline uint64_t dm_mac_face_buttons(int a, int b, int x, int y, int nintendo) {
++    return (a ? (nintendo ? DM_BTN_B : DM_BTN_A) : 0) |
++           (b ? (nintendo ? DM_BTN_A : DM_BTN_B) : 0) |
++           (x ? (nintendo ? DM_BTN_Y : DM_BTN_X) : 0) |
++           (y ? (nintendo ? DM_BTN_X : DM_BTN_Y) : 0);
++}
++
++static inline int32_t dm_mac_pad_axis(float value) {
++    if (!isfinite(value)) return 0;
++    float v = fmaxf(-1.f, fminf(1.f, value));
++    float magnitude = fabsf(v);
++    if (magnitude <= 0.12f) return 0;
++    return (int32_t)(copysignf((magnitude - 0.12f) / 0.88f, v) * DM_STICK_MAX);
++}

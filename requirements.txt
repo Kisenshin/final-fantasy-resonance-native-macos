@@ -1,0 +1,6 @@
+# Versions observed in the maintainer's working environment.
+lz4==4.4.5
+capstone==5.0.6
+fonttools==4.67.0
+# Used by generic readers; not exercised by this game's IoStore shader path.
+backports.zstd; python_version < '3.14'

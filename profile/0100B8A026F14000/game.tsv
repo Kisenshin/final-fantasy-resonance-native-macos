@@ -1,0 +1,26 @@
+# FINAL FANTASY RESONANCE HK 1.0.1: graphics bring-up profile.
+# Allocator addresses verified against HK NSO; shaders extracted from merged HK resources.
+# Memory split follows the upstream same-engine profile as a starting assumption.
+# Shader tables are generated from the HK resources; no FPS fixed addresses imported.
+title_id	0100B8A026F14000
+program_id	0100B8A026F14000
+name	FINAL FANTASY RESONANCE HK
+ipa	FinalFantasyResonanceHK.ipa
+app_category	public.app-category.games
+build	v65536	1.0.1	main=b7f965b9d7227db8e29f04e84ea7331b	subsdk0=ab62fe8edd07a6a293f885d54359e559	sdk=0023a1b06130cd795f7bc4613772af0a
+package	v65536
+shader_versions	v65536
+modules	main subsdk0 sdk
+romfs_marker	FFRS/Content/Paks/FFRS-Switch.ucas
+zip_store	.pak:.ttf:.txt:.ucas:.utoc:.metallib
+fps_target	0
+game_args	-SwitchVirtualAddressSpaceSize=4064
+mem_reserve	0x140000000
+mem_alias	0x118000000
+mem_stack	0x10000000
+app_pool	0xCD500000
+sys_resource	0x1400000
+pad_layout	full
+tex_dyn_slots	on
+shader_groups	ShaderArchive-Global-=global ShaderArchive-=game
+shader_note	FINAL FANTASY RESONANCE HK 1.0.1 shaders

@@ -1,0 +1,5 @@
+{
+  "keyboard": "键盘｜A 确认：J / 空格　B 返回：K / Esc　X：U　Y：I　＋ 菜单：Enter　−：Tab\n移动 WASD｜十字键 ↑↓←→｜右摇杆 Option＋方向键｜L/R：Q/E　ZL/ZR：Z/C　L3/R3：F/G｜F1 对照　F2 隐藏",
+  "xbox": "Xbox｜A 确认　B 返回　X / Y 按字母对应｜LB / RB 肩键　LT / RT 扳机\n左、右摇杆及按下｜十字键 ↑↓←→｜Menu＝＋　View＝−｜F1 按键对照　F2 隐藏提示",
+  "switch": "Switch Pro｜A 确认　B 返回　X / Y 原布局｜L / R 肩键　ZL / ZR 扳机\n左、右摇杆及按下｜十字键 ↑↓←→｜＋ 菜单　− 视图｜F1 按键对照　F2 隐藏提示"
+}

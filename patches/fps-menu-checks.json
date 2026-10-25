@@ -1,0 +1,26 @@
+{
+  "original_ucas_bytes": 5976850224,
+  "patched_ucas_bytes": 5976859312,
+  "original_ucas_sha256": "eabbd6d9c8338cee8fc8a1d4b5262248d9b8cb88557bc8e2e5dbfe57e5e0da03",
+  "patched_ucas_sha256": "5756724eeeb2c88d14ec49ee09c1ff01a46eccc175c917e20bbaebfa994abd8a",
+  "original_utoc_sha256": "322012d7befea45ee7271f566162e8cf4ea73a9c9511b43b64f7a9ee49c055ac",
+  "patched_utoc_sha256": "d2b33467de01ffdb1c4eab0782f723942e090790f07e8b73ba6a5ab91c350598",
+  "chunks": [
+    {
+      "chunk_index": 50680,
+      "chunk_id": "6ae1150b016c601400000001",
+      "original_bytes": 8231,
+      "patched_bytes": 8231,
+      "original_sha256": "e700393014fc9bf19ced44f04e216cc1a85fd903ef9fc2da0d44fe3472e86e37",
+      "patched_sha256": "5e39e19d017e57959cba9853b55a78bd4a2b9152de2e6c1ccfdf9956e1f09de0"
+    },
+    {
+      "chunk_index": 44601,
+      "chunk_id": "6252e50875c547f700000001",
+      "original_bytes": 1051,
+      "patched_bytes": 848,
+      "original_sha256": "31336e91c1c53e26342b137dd347d9cc5f6f52e745ed6c1233b469f1839680ed",
+      "patched_sha256": "eaa611e3873169f204d250ee33cdab9b713aa0569ccadeffc4c440231e2ba18b"
+    }
+  ]
+}

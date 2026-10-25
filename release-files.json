@@ -1,0 +1,150 @@
+{
+  "kind": "reviewed source-only file list",
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 469,
+      "sha256": "946eef8da764a3aa7c8d19810f65689b5eb5252b57f7d554bda0b6a7457dbd70"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1079,
+      "sha256": "33cbb2f04b7ac7da33f3f68c142422f1889a4d0b6f67a7ff3a07a5205d347534"
+    },
+    {
+      "path": "LICENSE-nxnative",
+      "bytes": 1063,
+      "sha256": "a65554a74de59bf4d2210f3d4381c67d6fc6fa78f237f83c85543773319efa7b"
+    },
+    {
+      "path": "README.md",
+      "bytes": 7046,
+      "sha256": "e829d9e52118ce6cf4c24cb91e86ea947f58c6f80b2de03ea6b78f9f0fc0fef6"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "bytes": 2020,
+      "sha256": "f2347100ece5f9394d7a09e60d7582bc8c7ae693f94da3024fe154d1c8bffbf7"
+    },
+    {
+      "path": "docs/PUBLISHING.md",
+      "bytes": 1207,
+      "sha256": "2ee521bc4fcd5681ce20fa45c8967c16b886a8240c276df1d58eb9ae71f654db"
+    },
+    {
+      "path": "docs/VALIDATION.md",
+      "bytes": 2256,
+      "sha256": "05ef642553ea002a9267de1b8ff5e5cc0e1b7b89b70ab4191731e48fd0e13d9d"
+    },
+    {
+      "path": "launcher/FFRLauncher.m",
+      "bytes": 6300,
+      "sha256": "6bb3842ffec9bf4ec5b8a1ed9248288fdc91c4ea096dc8bc59c7d5cbf3b6034e"
+    },
+    {
+      "path": "launcher/controls-guide.txt",
+      "bytes": 1811,
+      "sha256": "f3e78417318e71b59dbfc153fcb76221c3f1681c572378909babd8fb9868879b"
+    },
+    {
+      "path": "launcher/controls-hints.json",
+      "bytes": 676,
+      "sha256": "3dc91e1058a475d140ac79f907430154763883861ff127064be0a497fa88188c"
+    },
+    {
+      "path": "patches/fps-menu-checks.json",
+      "bytes": 1127,
+      "sha256": "b1e751728faca884b1ebb28184a972804fba97ecc2fb42eb74057abb3dacb9ad"
+    },
+    {
+      "path": "patches/runtime.patch",
+      "bytes": 61752,
+      "sha256": "79df370a9c3d760a680b3f3d0b843251e3ed2b0429e4468dba11533ecd1ab5c7"
+    },
+    {
+      "path": "profile/0100B8A026F14000/game.tsv",
+      "bytes": 1090,
+      "sha256": "9e4e063ba5fc89b802ba887e7a2454c92a1e664cd4f3b8830130e3d0d3df5356"
+    },
+    {
+      "path": "profile/0100B8A026F14000/patches.py",
+      "bytes": 508,
+      "sha256": "80ff24f46af93ae4168ec960d2e9b93f1f4578341ff4b61a6c7061c5178aa488"
+    },
+    {
+      "path": "profile/0100B8A026F14000/pso_manifest.tsv",
+      "bytes": 458514,
+      "sha256": "620027f3f73ed580522fb189a670dff17410f8fdd246942855469e359948f8c4"
+    },
+    {
+      "path": "profile/0100B8A026F14000/shader_facts.tsv",
+      "bytes": 141057,
+      "sha256": "7263d202352c923cc6db4a14013f067f5b65ed253f47567f4e6b57be13dae81d"
+    },
+    {
+      "path": "profile/0100B8A026F14000/shader_facts_manual.tsv",
+      "bytes": 281,
+      "sha256": "b2deaa85045ef559bc52fc6c4b79fb07d12533f3abe59d026c35af1feadca161"
+    },
+    {
+      "path": "profile/0100B8A026F14000/shader_map.tsv",
+      "bytes": 9244963,
+      "sha256": "1705c506bc4b9b4bdd58388df7c11ef6e29e4cf15048d8734e16cf7228743d30"
+    },
+    {
+      "path": "profile/0100B8A026F14000/shader_map.tsv.conflicts.tsv",
+      "bytes": 125,
+      "sha256": "ff5237efe550d06ef4e98b5dda4f0074f2ec7e29330af16ab3f5b93d8d73f62b"
+    },
+    {
+      "path": "profile/0100B8A026F14000/shader_pairs.tsv",
+      "bytes": 314756,
+      "sha256": "ed4e791949f17a2323eb72a0d0ff59b2bffa6399cc0775f541e3c2ed05fe4fe0"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 223,
+      "sha256": "d71d69a5e1f8db3e0a2cf37f4a060ddb76098df2c02d801943db975a61c751b8"
+    },
+    {
+      "path": "scripts/audit_release.py",
+      "bytes": 3756,
+      "sha256": "46cbe746931175664e266390ae98511df5fc0d0e7cdd02530b77431cb79f5e72"
+    },
+    {
+      "path": "scripts/blake3_reference.py",
+      "bytes": 1948,
+      "sha256": "c3d99c9112e8d2b986a5b788f1489e1cc42d4baee73e30d5e96ec5e2d8d0e2bf"
+    },
+    {
+      "path": "scripts/build_mac.py",
+      "bytes": 9616,
+      "sha256": "0b6001c846a5b0b95c69c523c890e8171b8f70bbf2769f92a5d7d1013ebd79bc"
+    },
+    {
+      "path": "scripts/package_app.py",
+      "bytes": 6022,
+      "sha256": "a745aa8955a6cb9ec14139d963fb8412d390e9cb01d519d883047c24a38410b2"
+    },
+    {
+      "path": "scripts/parse_settings_asset.py",
+      "bytes": 2370,
+      "sha256": "c74806625cd6bca3dafc1402e98002c86c48293632d5064bb5dcae9a7a5098fb"
+    },
+    {
+      "path": "scripts/patch_fps_menu.py",
+      "bytes": 5523,
+      "sha256": "4b91107a9b0122eeadfcc02cbb145ce6f34a9369f467887a694460bb384d6c25"
+    },
+    {
+      "path": "scripts/prepare_runtime.py",
+      "bytes": 1916,
+      "sha256": "1fe210a8d27b18a533d6926b947780f0f826be6042ad4e7d8a91baa5a48dc5e0"
+    },
+    {
+      "path": "upstream.json",
+      "bytes": 1961,
+      "sha256": "b4e7e2937f6ad9384ce33f27b1fcdc3da1067eaa1e94f93ffe9734ce9d1b723d"
+    }
+  ]
+}

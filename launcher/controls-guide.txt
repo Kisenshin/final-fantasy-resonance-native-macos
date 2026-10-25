@@ -1,0 +1,33 @@
+键盘 / Xbox / Switch Pro 按键对照
+
+输入设备提示会随最近使用的键盘或手柄自动切换。
+游戏原有 NS 图标保留，请按下列对应键操作。
+Xbox 按字母映射：A 确认、B 返回；Switch Pro 保留原布局。
+
+Switch 提示       键盘                  Xbox / Switch Pro
+A（确认）         J 或 Space            A / A
+B（返回）         K、Esc 或 Backspace   B / B
+X                 U                     X / X
+Y                 I                     Y / Y
+左摇杆            W A S D               左摇杆 / 左摇杆
+右摇杆            Option＋方向键        右摇杆 / 右摇杆
+十字键            方向键                十字键 / 十字键
+L / R             Q / E                 LB / RB；L / R
+ZL / ZR           Z / C                 LT / RT；ZL / ZR
+按下左 / 右摇杆   F / G                 L3 / R3（按摇杆）
+＋（系统菜单）    Enter                 Menu / ＋
+−                 Tab                   View / −
+
+右摇杆也支持数字小键盘 4 / 6 / 8 / 2。
+F1：显示本对照表；F2：显示或隐藏底部提示栏。
+Command＋Q：退出；Control＋Command＋F：全屏。
+
+先在 macOS 中连接手柄，游戏会自动识别。
+摇杆加入小幅死区以减少漂移；切出游戏会释放按键。
+手柄体感、振动及系统 Home / 截图键不在此次适配范围。
+
+全屏：Control＋Command＋F，或点击窗口绿色按钮。
+帧率：原游戏「选项（Option）→画面设置→帧率」选择 30 或 60。
+按 Y 应用（键盘 I），选择「是」并按 A 确认（键盘 J／空格），设置会保存。
+顶部 Performance 菜单显示当前帧率档位，修改统一在游戏原设置页面完成。
+60 帧仅已验证起始场景；若掉帧或出现异常，切回 30 FPS。

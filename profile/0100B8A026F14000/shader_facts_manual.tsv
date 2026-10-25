@@ -1,0 +1,4 @@
+# Upstream FFR's integer-output fact applies to this exact control+code hash.
+# The HK extraction independently reproduced all 73,496 shader keys and stages.
+# This global pixel shader is CopyStencilToLightingChannelsPS (archive entry 1627).
+c254eaa40e0c4f1e	{"fout":{"0":"uint"}}

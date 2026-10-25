@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/seedds/nxnative.git",
+  "commit": "86d9ba123967cfe520e556e882dcd4e0ef7ba272",
+  "shader_chain": "e09c9cc1f074",
+  "game_id": "0100B8A026F14000",
+  "main_build_id": "b7f965b9d7227db8e29f04e84ea7331b",
+  "tested_installed_host_sha256": "b6a66150f1caea62e8a437032f18bfc95d166fa4b2319331281a4f82a4c8afc1",
+  "runtime_source_sha256": {
+    "dm/gfx/nvn/dmsh_chain.h": "9b9dc7d9e28b66c678bf386e2d56861e4d58d1e34ddd3b08cca4bd8158411231",
+    "dm/gfx/nvn/nvn_mtl.m": "ef955405d4855fb1a4ea003a78dfd1d83ba08f93924553e0dfb4b4c3b02dddc0",
+    "dm/gfx/nvn/nvn_refl.m": "b907c10ac707174f40125f58b0df6aaec5f092eba87445484775c51d65b868df",
+    "dm/gfx/tools/c1_guard.py": "501a4f02fde3b81dda4703f0d15ad104d9046b100c9afd81137ef2f68c339668",
+    "dm/gfx/tools/dmsh_build.py": "455ff47b17f1332b73124814452ff81cf5499196dc36dc3dde3827e3b8444d10",
+    "dm/gfx/tools/dmsh_chain.py": "b77f27cafee20c8cd4d477c101c8d521dac0e9b1dc990762250cba74b5899061",
+    "dm/gfx/tools/shader_split.py": "8442aeab42494c9737a1cd364dfd91b28edecdd027995f2dad3cd4eadfe6d1d1",
+    "dm/host/Makefile": "0f5a7803e5c369bec7bc223b6d58f80ac9c69b1c271d507ae3cccc0802bb2264",
+    "dm/host/front_mac.m": "3573a54de361a9ca6c1a920f6da9a7087c33a6eb4870043be3921509c5e655c9",
+    "dm/host/hle.h": "59d20861b7b05941e1fec2a8bd9462f26d25dc8f68ca3fa005e81dd69553d1d4",
+    "dm/host/hle_audio.c": "60f0eb716d53eafa7595c69f279140ea6a7a84bacbf40a30c6dce245e15363b1",
+    "dm/host/hle_fpslock.c": "7d014cf9002f4eca93f3f8e176fc74d007433b34052a6a966ef45e2b11b4cc58",
+    "dm/host/hle_hid.c": "31ddd48e327a1b8bd6441ca3c393e3463e1265eebfa96c83adb564f748c986f4",
+    "dm/host/hle_uemalloc.c": "a0ec35e001cf849347f70a43292b108cf94de330985982b0afb5e033076b8f08",
+    "dm/host/front_mac_input.h": "83cc655d5b7bdd24ce0e36bb6324fb62ff905904b617ae0f3bb230ac7982c627"
+  },
+  "validation": "Source packaging/static checks only. Full clean build not performed. Live GPU-profiler experiment excluded."
+}
