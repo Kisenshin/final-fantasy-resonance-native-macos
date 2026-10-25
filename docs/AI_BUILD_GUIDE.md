@@ -1,5 +1,7 @@
 # 把项目交给 AI 协助构建
 
+[简体中文](AI_BUILD_GUIDE.md) | [English](AI_BUILD_GUIDE.en.md)
+
 本项目完整名称为 **FINAL FANTASY RESONANCE Native macOS（最终幻想：共鸣 macOS 实验适配）**，基于 nxnative。它提供现有移植方案的源码和构建入口，不需要让 AI 重新设计整套移植引擎。
 
 ## 一个链接能解决什么

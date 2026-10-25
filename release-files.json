@@ -17,9 +17,14 @@
       "sha256": "a65554a74de59bf4d2210f3d4381c67d6fc6fa78f237f83c85543773319efa7b"
     },
     {
+      "path": "README.en.md",
+      "bytes": 9418,
+      "sha256": "0cd319a680a5d8d26d791a7737c45c95274b080aa930350bedf964d2964f43f3"
+    },
+    {
       "path": "README.md",
-      "bytes": 8155,
-      "sha256": "77c56ae768f55480a8c7720b9875c31620ef16deadf76637803034377f48638e"
+      "bytes": 8330,
+      "sha256": "98fae8cf72d4c8c254210d2ec2ef6f160d624ad541ddad9d50ce3eb4fdc8d328"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -27,24 +32,44 @@
       "sha256": "f2347100ece5f9394d7a09e60d7582bc8c7ae693f94da3024fe154d1c8bffbf7"
     },
     {
+      "path": "docs/AI_BUILD_GUIDE.en.md",
+      "bytes": 4866,
+      "sha256": "024756b920554d4b747aff29f267970158f1984429448dff8d67f61f2d4c5bf9"
+    },
+    {
       "path": "docs/AI_BUILD_GUIDE.md",
-      "bytes": 4584,
-      "sha256": "d82c73a774abe78e5f26f5f5c501603ab37146fbd63bbf2eff648ffda513f5a8"
+      "bytes": 4653,
+      "sha256": "aab281bc1f4db1ac7e673c91a8a7a4bfad5a2260598727adc3d6d4fbea464ae7"
+    },
+    {
+      "path": "docs/CONTROLS_AND_FPS.en.md",
+      "bytes": 6075,
+      "sha256": "0865314757bf7b4505bc5100220f4f6a037d6d5962103c9341e5e75c9ea8adcd"
     },
     {
       "path": "docs/CONTROLS_AND_FPS.md",
-      "bytes": 5466,
-      "sha256": "17f5dc65dbfdfea3b93c7d629a8f86d788b18d9a9f1ba5c8ac1dcc8f09807174"
+      "bytes": 5539,
+      "sha256": "61175641f0882b3a101744da4a74e75d91dd3152d5ed7044533cb409cbaf8256"
+    },
+    {
+      "path": "docs/PUBLISHING.en.md",
+      "bytes": 1385,
+      "sha256": "73071dda6a424a519d9dd9e4639ee7261a72d0474c3976e5aa0c97d5131d8125"
     },
     {
       "path": "docs/PUBLISHING.md",
-      "bytes": 1207,
-      "sha256": "2ee521bc4fcd5681ce20fa45c8967c16b886a8240c276df1d58eb9ae71f654db"
+      "bytes": 1268,
+      "sha256": "d7397a7906317f58605091167460226c12329224004f016dd6c1f349ef1bf9cf"
+    },
+    {
+      "path": "docs/VALIDATION.en.md",
+      "bytes": 2808,
+      "sha256": "3cd1200b4f00e6f47a9ec82ee256c6f53dcb4abb0c2187fcec555cc3efb90c17"
     },
     {
       "path": "docs/VALIDATION.md",
-      "bytes": 2256,
-      "sha256": "05ef642553ea002a9267de1b8ff5e5cc0e1b7b89b70ab4191731e48fd0e13d9d"
+      "bytes": 2317,
+      "sha256": "f75a4ae2e22346c4e85dd50c7f4d979a1718f1f95db744345ba58537241edc20"
     },
     {
       "path": "launcher/FFRLauncher.m",
@@ -118,8 +143,8 @@
     },
     {
       "path": "scripts/audit_release.py",
-      "bytes": 3756,
-      "sha256": "46cbe746931175664e266390ae98511df5fc0d0e7cdd02530b77431cb79f5e72"
+      "bytes": 3771,
+      "sha256": "71aedf4227f9fcf4ed6f9df0904f132817295e13d54e4aa12d279d87c954d0a3"
     },
     {
       "path": "scripts/blake3_reference.py",

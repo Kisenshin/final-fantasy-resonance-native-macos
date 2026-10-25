@@ -1,5 +1,7 @@
 # 键盘、手柄与游戏内 30／60 帧设置
 
+[简体中文](CONTROLS_AND_FPS.md) | [English](CONTROLS_AND_FPS.en.md)
+
 以下操作适用于港版 1.0.1 的本机适配应用。新的源码构建入口仍未完成全新环境端到端验证，见 [验证状态](VALIDATION.md)。
 
 ## 连接与提示方式

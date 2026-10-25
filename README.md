@@ -1,10 +1,14 @@
 # FINAL FANTASY RESONANCE Native macOS
 
+[简体中文](README.md) | [English](README.en.md)
+
 最终幻想：共鸣 — 基于 nxnative 的实验性 Apple Silicon macOS 适配
 
 基于 [nxnative](https://github.com/seedds/nxnative) 的源码适配项目。用户自行提供游戏文件与从自己的主机导出的密钥，在本机生成 Mac 应用。仓库只提供适配源码、补丁、标识表和脚本，不提供游戏本体或可直接游玩的应用。
 
 > **状态：本机适配已在 M1 Pro / macOS 26.5.1 上运行；此处新整理的构建入口尚未完成从零到应用的端到端验证，也没有其他机型的独立复现结果。** 现阶段适合愿意处理构建问题的测试者，不能承诺一键成功或全流程通关。
+
+语言链接切换的是项目文档；当前启动器仍默认简体中文，本次未新增游戏内语言选择器。
 
 ## 当前支持范围
 

@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse,ast,hashlib,json,os,re,subprocess
 ROOT=Path(__file__).resolve().parents[1]
 DENY={'.nsp','.xci','.nca','.keys','.key','.pem','.p12','.tik','.cert','.nso','.nro','.bin','.elf','.metallib','.metal','.spv','.air','.pak','.ucas','.utoc','.uasset','.uexp','.ubulk','.locres','.nacp','.ttf','.otf','.png','.jpg','.jpeg','.icns','.log','.ips','.zip','.7z','.rar'}
-ROOT_NAMES={'.gitignore','README.md','LICENSE','LICENSE-nxnative','THIRD_PARTY_NOTICES.md','requirements.txt','upstream.json','release-files.json'}
+ROOT_NAMES={'.gitignore','README.md','README.en.md','LICENSE','LICENSE-nxnative','THIRD_PARTY_NOTICES.md','requirements.txt','upstream.json','release-files.json'}
 PREFIXES={'scripts/','patches/','profile/0100B8A026F14000/','launcher/','docs/'}
 SECRET=re.compile(r'(?im)^\s*(?:master_key_[0-9a-f]{2}|titlekek_[0-9a-f]{2}|header_key|key_area_key_application_[0-9a-f]{2})\s*=\s*[0-9a-f]{32,}')
 

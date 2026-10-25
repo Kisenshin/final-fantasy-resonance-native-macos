@@ -1,5 +1,7 @@
 # 上传前操作
 
+[简体中文](PUBLISHING.md) | [English](PUBLISHING.en.md)
+
 1. 只将这个源码目录作为 Git 仓库。不要把它的父级工作区、私有构建目录或已生成的应用纳入仓库。
 2. 执行 `python scripts/audit_release.py`。在源码经人工审查后修改了发布文件，可重新执行 `python scripts/audit_release.py --seal`，再检查生成的清单差异；seal 本身不能证明知识产权或密钥安全。
 3. 确定自己的 GitHub 仓库名称以及 public/private。按自己的账户创建仓库，远程地址应指向自己的仓库，不要使用 `upstream.json` 中的上游地址作为发布目标。
